@@ -57,6 +57,26 @@ export async function sep10Token(): Promise<string> {
   return token;
 }
 
+export async function challengeFor(account: string): Promise<{ transaction: string; networkPassphrase: string }> {
+  const { anchor } = config();
+  const res = await fetch(`${anchor}/auth?account=${account}`);
+  if (!res.ok) throw new AnchorError(`SEP-10 challenge failed (${res.status})`);
+  const data = (await res.json()) as { transaction: string; network_passphrase?: string };
+  return { transaction: data.transaction, networkPassphrase: data.network_passphrase ?? Networks.TESTNET };
+}
+
+export async function tokenFrom(signedXdr: string): Promise<string> {
+  const { anchor } = config();
+  const res = await fetch(`${anchor}/auth`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ transaction: signedXdr }),
+  });
+  if (!res.ok) throw new AnchorError(`SEP-10 verification failed (${res.status})`);
+  const { token } = (await res.json()) as { token: string };
+  return token;
+}
+
 export type DepositStarted = {
   id: string;
   iban: string;

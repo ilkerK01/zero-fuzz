@@ -2,6 +2,7 @@
 
 import { FloatingNav, SiteFooter } from "@/components/home/nav";
 import { PasskeyBadge, PasskeyGate } from "@/components/passkey";
+import { WalletConnect } from "@/components/wallet-connect";
 import { AmountDisplay, Button, Kicker } from "@/components/ui";
 import { useLang } from "@/components/lang";
 
@@ -21,7 +22,8 @@ export default function DashboardPage() {
               <AmountDisplay value="0.00" unit="TRYC" tone="muted" size="lg" />
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <WalletConnect />
             <PasskeyBadge />
             <Button href="/deposit" variant="ghost">{t("nav.deposit")}</Button>
             <Button href="/scan/new" variant="primary">{t("dash.newscan")}</Button>

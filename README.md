@@ -58,7 +58,7 @@ Z-FUZZ satisfies each, and where the evidence is.
 
 | Requirement | How Z-FUZZ meets it | Status |
 |---|---|---|
-| **Integration** — build on an eligible Stellar protocol | The composability lane fuzzes the target contract **against a live Blend v2 lending pool and Soroswap price**. The headline finding cannot be reproduced without Blend v2. | Load-bearing by design |
+| **Integration** — build on an eligible Stellar protocol | The composability lane fuzzes the target contract **against a live Blend v2 lending pool and Soroswap price** (the headline finding cannot be reproduced without Blend v2), and users connect their own wallet through **Stellar Wallets Kit** (Freighter, xBull, Albedo, Hana) to sign SEP-10 themselves. | Load-bearing by design |
 | **Anchor / Local Payments** — a real fiat rail | SEP-10 auth + SEP-6 deposit against the TR mock anchor. A developer deposits **TRY** and receives **USDC** on Stellar testnet, on chain. | **Live, verified on chain** |
 | **Core Feature** — the integration carries the product | Removing Blend v2 removes the headline vulnerability. The scan is the product; the integration is where the bug lives. | Load-bearing by design |
 
@@ -173,6 +173,7 @@ Z-FUZZ is honest about its state. Nothing below is claimed that does not run.
 |---|---|
 | Frontend, 8 screens, EN/TR | Working |
 | Passkey sign-in (WebAuthn) | Working |
+| Wallet connect (Stellar Wallets Kit) + client-signed SEP-10 | Working |
 | SEP-10 authentication | Working, live on testnet |
 | SEP-6 anchor deposit, TRY → USDC | Working, settles on chain |
 | Docker sandbox, `cargo test` offline | Working (soroban-sdk 28, `network=none`) |
@@ -216,6 +217,8 @@ sandbox, agent and anchor underneath are real and independently runnable.
 |---|---|---|
 | `GET` | `/api/anchor` | Account address and live USDC balance |
 | `POST` | `/api/anchor` | SEP-10 auth, SEP-6 deposit, settle, return the Stellar transaction |
+| `GET` | `/api/anchor/challenge` | SEP-10 challenge for a connected wallet address |
+| `POST` | `/api/anchor/challenge` | Submit the wallet-signed challenge, return the token |
 | `GET` | `/api/passkey` | Current session and whether a passkey is registered |
 | `POST` | `/api/passkey` | `register-options`, `register`, `auth-options`, `auth` |
 | `DELETE` | `/api/passkey` | Sign out |
@@ -248,7 +251,7 @@ scripts/
 ## Tech stack
 
 Next.js 16 (App Router), React 19, Tailwind CSS 4, TypeScript, SimpleWebAuthn 13,
-`@stellar/stellar-sdk`. Interface type is Geist; monospace is reserved for machine output —
+Stellar Wallets Kit, `@stellar/stellar-sdk`. Interface type is Geist; monospace is reserved for machine output —
 terminal lines, test names, transaction hashes and contract addresses.
 
 Chain and agent: Soroban (Rust, soroban-sdk 28), Blend v2 and Soroswap, SEP-6 and SEP-10

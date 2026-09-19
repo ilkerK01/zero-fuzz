@@ -19,6 +19,14 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
+export async function dockerAvailable(): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile("docker", ["version", "--format", "{{.Server.Version}}"], { timeout: 4000, windowsHide: true }, (err) =>
+      resolve(!err),
+    );
+  });
+}
+
 export async function runTest(testSource: string): Promise<SandboxResult> {
   const dir = await mkdtemp(join(tmpdir(), "zf-sbx-"));
   const file = join(dir, "gen.rs");

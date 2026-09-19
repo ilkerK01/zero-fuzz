@@ -291,6 +291,32 @@ npm run setup
 
 ---
 
+## Deploying to Vercel
+
+The frontend, the passkey flow and the whole anchor leg run fine on Vercel. **The sandbox
+does not**: serverless functions cannot start containers, so `cargo test` has no host to run
+on. A scan on the hosted build still authenticates, still calls the model and still returns
+the generated Rust test — it just reports that the test was not executed, instead of
+pretending it was.
+
+Set these environment variables in the Vercel project (values come from `.env.local` after
+running `npm run setup`):
+
+```
+ZF_ACCOUNT_SECRET   ZF_ACCOUNT_PUBLIC   ZF_ANCHOR_URL
+ZF_ASSET_CODE       ZF_ASSET_ISSUER
+GEMINI_API_KEY      ZF_MODEL
+```
+
+Two things to know about the hosted build:
+
+- **Passkeys are bound to the domain.** A passkey registered on `localhost` will not work on
+  the Vercel URL, and vice versa. Register a new one on the deployed domain.
+- **Passkey credentials live in memory**, so they do not survive across serverless instances.
+  Fine for a demo, not for production; a real deployment needs a store.
+
+To demo the full scan, run it locally with Docker running.
+
 ## Remaining work
 
 - Join the agent and sandbox into one live loop, replacing the scripted scan fixture

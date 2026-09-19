@@ -1,6 +1,6 @@
 import "server-only";
 import { generateTest } from "./gemini";
-import { runTest, type SandboxResult } from "./sandbox";
+import { dockerAvailable, runTest, type SandboxResult } from "./sandbox";
 
 export type ScanStep = {
   agent: string;
@@ -13,6 +13,7 @@ export type ScanReport = {
   testSource: string;
   sandbox: SandboxResult;
   vulnerable: boolean;
+  sandboxAvailable: boolean;
 };
 
 const DEFAULT_SCENARIO =
@@ -26,6 +27,28 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
 
   const testSource = await generateTest(scenario);
   steps.push({ agent: "agent-2", tone: "agent", text: "test generated, handing off to sandbox" });
+
+  if (!(await dockerAvailable())) {
+    steps.push({
+      agent: "sandbox",
+      tone: "muted",
+      text: "container runtime not available on this host, test not executed",
+    });
+    return {
+      steps,
+      testSource,
+      sandbox: {
+        passed: false,
+        failed: 0,
+        compiled: false,
+        summary: "sandbox unavailable on this host",
+        log: [],
+      },
+      vulnerable: false,
+      sandboxAvailable: false,
+    };
+  }
+
   steps.push({ agent: "sandbox", tone: "muted", text: "spawning air-gapped container (network=none)" });
 
   const sandbox = await runTest(testSource);
@@ -45,5 +68,6 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
     testSource,
     sandbox,
     vulnerable: sandbox.compiled && sandbox.failed > 0,
+    sandboxAvailable: true,
   };
 }

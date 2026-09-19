@@ -9,6 +9,7 @@ export type ScanReport = {
   testSource: string;
   sandbox: { compiled: boolean; failed: number; summary: string; log: string[] };
   vulnerable: boolean;
+  sandboxAvailable: boolean;
 };
 
 const toneClass: Record<ScanStep["tone"], string> = {
@@ -109,10 +110,28 @@ export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
         </div>
       ) : null}
 
-      {report ? (
+      {report && report.sandboxAvailable ? (
         <p className="mt-3 text-fg-3">
           {tr ? "kapsül kapatıldı" : "sandbox destroyed"} · {report.sandbox.summary}
         </p>
+      ) : null}
+
+      {report && !report.sandboxAvailable ? (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-fg-2">
+            {tr
+              ? "Bu ortamda konteyner çalıştırılamıyor, test koşulmadı."
+              : "No container runtime on this host, so the test was not executed."}
+          </p>
+          <p className="mt-2 text-fg-3">
+            {tr
+              ? "Ajanın ürettiği test aşağıda. Kapsül yerelde çalışır: npm run dev + Docker."
+              : "The generated test is below. The sandbox runs locally with Docker."}
+          </p>
+          <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-[12px] text-agent">
+            {report.testSource}
+          </pre>
+        </div>
       ) : null}
     </div>
   );

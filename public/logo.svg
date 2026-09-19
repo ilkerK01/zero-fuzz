@@ -1,0 +1,9 @@
+<svg width="480" height="96" viewBox="0 0 480 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="480" height="96" fill="#0A0B0D" />
+  <g transform="translate(28 16) scale(2)">
+    <path d="M29 16 22.5 27.26 9.5 27.26 3 16 9.5 4.74 22.5 4.74Z" stroke="#00E5FF" stroke-width="1.9" stroke-linejoin="miter" />
+    <path d="M10.5 11.5H21.5L10.5 20.5H18.8" stroke="#E6EAF0" stroke-width="2.9" stroke-linecap="square" stroke-linejoin="miter" />
+    <rect x="19.2" y="19.05" width="2.9" height="2.9" fill="#FF5C5C" />
+  </g>
+  <text x="120" y="58" font-family="Geist, Inter, system-ui, sans-serif" font-size="30" font-weight="600" letter-spacing="5.5" fill="#E6EAF0">Z-FUZZ</text>
+</svg>

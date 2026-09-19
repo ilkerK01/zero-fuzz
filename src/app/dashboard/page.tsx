@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { FloatingNav, SiteFooter } from "@/components/home/nav";
 import { PasskeyBadge, PasskeyGate } from "@/components/passkey";
 import { WalletConnect } from "@/components/wallet-connect";
@@ -8,6 +9,22 @@ import { useLang } from "@/components/lang";
 
 export default function DashboardPage() {
   const { t } = useLang();
+  const [balance, setBalance] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/anchor");
+        const data = (await res.json()) as { balance?: string; code?: string };
+        if (!cancelled && res.ok) setBalance(data.balance ?? "0");
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <>
       <FloatingNav />
@@ -19,7 +36,12 @@ export default function DashboardPage() {
               <span className="text-[11px] text-fg-3">
                 {t("dash.credit")}
               </span>
-              <AmountDisplay value="0.00" unit="TRYC" tone="muted" size="lg" />
+              <AmountDisplay
+                value={balance === null ? "…" : Number(balance).toFixed(2)}
+                unit="USDC"
+                tone={balance && Number(balance) > 0 ? "ok" : "muted"}
+                size="lg"
+              />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">

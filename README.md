@@ -12,6 +12,10 @@ Rise In x Stellar Pro Hackathon, Istanbul · **Genesis track**
 
 ![Z-FUZZ landing](docs/screens/01-hero.png)
 
+**Watch the demo:** [`docs/demo/zero-fuzz-demo.mp4`](docs/demo/zero-fuzz-demo.mp4) — 1:26, narrated
+and subtitled. A wallet is connected, the SEP-10 challenge is signed in Freighter, a scan runs,
+and the contract actually fails inside the sandbox.
+
 ---
 
 ## Try it

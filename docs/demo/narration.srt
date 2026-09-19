@@ -1,0 +1,96 @@
+1
+00:00:01,603 --> 00:00:04,723
+Soroban has a state model the EVM never had.
+
+2
+00:00:04,723 --> 00:00:07,844
+Entries expire, get archived, and can be brought back.
+
+3
+00:00:08,677 --> 00:00:14,572
+Foundry and Echidna cannot model any of that, so
+the most dangerous bugs ship straight to mainnet.
+
+4
+00:00:15,695 --> 00:00:17,082
+Z-FUZZ hunts them first.
+
+5
+00:00:17,082 --> 00:00:22,283
+I connect my own Stellar wallet, with no
+password and no seed phrase handed over.
+
+6
+00:00:23,088 --> 00:00:27,943
+My scan credit here arrived as real
+USDC through a SEP-6 Turkish Lira anchor.
+
+7
+00:00:29,594 --> 00:00:30,904
+I sign the SEP-10 challenge myself.
+
+8
+00:00:34,047 --> 00:00:36,803
+The anchor now trusts this wallet, not our server.
+
+9
+00:00:37,715 --> 00:00:38,755
+Now the scan.
+
+10
+00:00:38,755 --> 00:00:43,956
+I pick two lanes: state lifecycle, and composability
+against a live Blend v2 lending pool.
+
+11
+00:00:43,956 --> 00:00:46,036
+Then I let the agent go.
+
+12
+00:00:48,728 --> 00:00:53,582
+Free local tools triage first, so the
+paid agent only works where it matters.
+
+13
+00:00:53,582 --> 00:00:57,743
+It writes a Rust test and
+runs it in a sealed container.
+
+14
+00:00:57,743 --> 00:00:58,567
+And there it is.
+
+15
+00:00:59,540 --> 00:01:00,580
+The test failed.
+
+16
+00:01:00,580 --> 00:01:06,475
+It read an archived entry after its TTL expired
+and borrowed far too much against the pool.
+
+17
+00:01:06,475 --> 00:01:08,209
+Left one hundred, right zero.
+
+18
+00:01:08,209 --> 00:01:10,301
+That is a proof, not a warning.
+
+19
+00:01:11,158 --> 00:01:13,238
+Every finding ships with the fix.
+
+20
+00:01:13,238 --> 00:01:17,614
+The patch checks entry liveness and restores the archived
+state before reading collateral, closing the resurrection path.
+
+21
+00:01:18,506 --> 00:01:24,401
+Run it again, and a passing contract earns an
+on chain Z-FUZZ Audited stamp anyone can verify.
+
+22
+00:01:24,401 --> 00:01:26,481
+Break it here, not on mainnet.

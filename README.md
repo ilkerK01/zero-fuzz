@@ -75,6 +75,24 @@ settles, and USDC arrives on chain.
 
 Account: [`GDCASV6Z…56DI`](https://stellar.expert/explorer/testnet/account/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI)
 
+### Soroban contract, deployed and verified on testnet
+
+The audit registry writes each scan result on chain, which is what the Z-FUZZ Audited stamp
+resolves to. Source: [`contracts/registry`](contracts/registry) · 4 unit tests, soroban-sdk 28.
+
+| Item | Value |
+|---|---|
+| Contract | [`CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ`](https://stellar.expert/explorer/testnet/contract/CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ) |
+| Wasm hash | `830ceac9398cfa94814090625d905e8faa26ee6be905e82465876aead15b1427` |
+| Deploy tx | [`fdb63979…bb55`](https://stellar.expert/explorer/testnet/tx/fdb63979e331a349c52c7c4af1bf2ff7ef40099f2c9b63421bc9b8294afabb55) |
+| First audit written | [`9bfb6d2a…f059e`](https://stellar.expert/explorer/testnet/tx/9bfb6d2a5e494083519ad230450adb66ab81e49edfa5addb76ddc554a62f059e) |
+
+```
+record(wasm_hash, result_hash, passed, lanes) -> Audit   // writes + emits an `audit` event
+get(wasm_hash) -> Option<Audit>
+is_audited(wasm_hash) -> bool                            // returns true on chain today
+```
+
 ### skills.stellar.org files used
 
 The handbook requires each submission to state which skill files were used.
@@ -180,7 +198,7 @@ Z-FUZZ is honest about its state. Nothing below is claimed that does not run.
 | Gemini agent, generates Rust tests | Working (`gemini-3.5-flash-lite`) |
 | Agent → sandbox full loop | Wired next |
 | x402 metering with real deduction | Balance is real; deduction wired next |
-| Soroban registry contract on testnet | Deploy next |
+| Soroban registry contract on testnet | **Deployed, 4 tests, writes audits on chain** |
 
 The scan screens currently play a scripted fixture so the demo path is deterministic; the
 sandbox, agent and anchor underneath are real and independently runnable.

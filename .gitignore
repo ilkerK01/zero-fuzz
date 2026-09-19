@@ -18,3 +18,5 @@ yarn-error.log*
 next-env.d.ts
 /sandbox/_run/
 /sandbox/target/
+/contracts/**/target/
+/docs/demo/seg/

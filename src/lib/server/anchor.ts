@@ -141,7 +141,7 @@ export async function transaction(id: string, token: string): Promise<AnchorTx> 
   };
 }
 
-export async function settle(id: string, token: string, tries = 20): Promise<AnchorTx> {
+export async function settle(id: string, token: string, tries = 45): Promise<AnchorTx> {
   let last: AnchorTx = { status: "pending_anchor", amountOut: null, stellarTxId: null };
   for (let i = 0; i < tries; i++) {
     await new Promise((r) => setTimeout(r, 1500));

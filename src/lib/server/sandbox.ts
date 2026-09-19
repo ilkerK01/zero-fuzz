@@ -49,10 +49,12 @@ export async function runTest(testSource: string): Promise<SandboxResult> {
     });
 
     const compiled = !/error\[|could not compile/.test(output);
-    const failedMatch = output.match(/test result: FAILED\. \d+ passed; (\d+) failed/);
-    const okMatch = output.match(/test result: ok\. (\d+) passed/);
-    const failed = failedMatch ? Number(failedMatch[1]) : 0;
-    const okCount = okMatch ? Number(okMatch[1]) : 0;
+    let failed = 0;
+    let okCount = 0;
+    for (const m of output.matchAll(/test result: (ok|FAILED)\. (\d+) passed; (\d+) failed/g)) {
+      okCount += Number(m[2]);
+      failed += Number(m[3]);
+    }
 
     const log = output
       .split("\n")

@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import { FloatingNav, SiteFooter } from "@/components/home/nav";
-import { Terminal } from "@/components/terminal";
+import { LiveScan, type ScanReport } from "@/components/live-scan";
 import { AmountDisplay, Button, Kicker, Panel, StatusPill, TxLink } from "@/components/ui";
 import { useLang } from "@/components/lang";
 import { finding } from "@/lib/mock";
 
 export default function ScanPage() {
   const { t } = useLang();
-  const [done, setDone] = useState(false);
+  const [report, setReport] = useState<ScanReport | null>(null);
+  const done = report !== null;
+  const vulnerable = report?.vulnerable ?? false;
 
   return (
     <>
@@ -17,19 +19,19 @@ export default function ScanPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-28 pb-16">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <Kicker tone={done ? "danger" : "agent"}>
-              {done ? t("hero7.kicker") : t("term.title")}
+            <Kicker tone={vulnerable ? "danger" : done ? "ok" : "agent"}>
+              {vulnerable ? t("hero7.kicker") : t("term.title")}
             </Kicker>
             <p className="mono mt-2 text-sm text-fg-3">registry_pool.rs · 214 lines</p>
           </div>
-          <StatusPill tone={done ? "danger" : "agent"} pulse={!done}>
-            {done ? t("term.status.vuln") : t("term.status.fuzzing")}
+          <StatusPill tone={vulnerable ? "danger" : done ? "ok" : "agent"} pulse={!done}>
+            {vulnerable ? t("term.status.vuln") : done ? t("term.status.secure") : t("term.status.fuzzing")}
           </StatusPill>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-          <Panel className="p-0" glow={done ? "danger" : undefined}>
-            <Terminal onDone={() => setDone(true)} />
+          <Panel className="p-0" glow={vulnerable ? "danger" : done ? "ok" : undefined}>
+            <LiveScan onDone={setReport} />
           </Panel>
 
           <div className="space-y-4">
@@ -50,7 +52,7 @@ export default function ScanPage() {
               </div>
             </div>
 
-            {done ? (
+            {vulnerable ? (
               <div className="rise glow-danger bg-surface p-5">
                 <StatusPill tone="danger" pulse>{t("hero7.critical")}</StatusPill>
                 <h2 className="font-display mt-4 text-2xl text-fg">{t("hero7.title")}</h2>

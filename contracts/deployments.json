@@ -1,0 +1,12 @@
+{
+  "testnet": {
+    "registry": {
+      "contractId": "CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ",
+      "wasmHash": "830ceac9398cfa94814090625d905e8faa26ee6be905e82465876aead15b1427",
+      "deployTx": "fdb63979e331a349c52c7c4af1bf2ff7ef40099f2c9b63421bc9b8294afabb55",
+      "firstRecordTx": "9bfb6d2a5e494083519ad230450adb66ab81e49edfa5addb76ddc554a62f059e",
+      "network": "Test SDF Network ; September 2015",
+      "sdk": "soroban-sdk 28"
+    }
+  }
+}

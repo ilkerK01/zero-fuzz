@@ -124,10 +124,20 @@ export default function DepositPage() {
         </div>
 
         {result ? (
-          <div className="glow-ok mt-6 bg-surface p-6">
-            <StatusPill tone="ok">{result.status}</StatusPill>
+          <div
+            className={`mt-6 bg-surface p-6 ${result.status === "completed" ? "glow-ok" : "border border-line-strong"}`}
+          >
+            <StatusPill tone={result.status === "completed" ? "ok" : "agent"}>
+              {result.status}
+            </StatusPill>
             <h2 className="font-display mt-4 text-xl text-fg">
-              {tr ? "Para zincire düştü." : "The money landed on chain."}
+              {result.status === "completed"
+                ? tr
+                  ? "Para zincire düştü."
+                  : "The money landed on chain."
+                : tr
+                  ? "Anchor işlemi sürüyor."
+                  : "The anchor is still settling."}
             </h2>
             <dl className="mono mt-5 space-y-px bg-line text-[12px]">
               <div className="flex items-center justify-between bg-surface px-4 py-3">

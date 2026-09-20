@@ -1,114 +1,66 @@
-# Technical documentation
+# Technical notes
 
-## Architecture
+The handbook asks that a project be technically understandable through the README, and it
+is: architecture, components, Stellar integrations, design decisions, trade-offs and
+challenges all live in [`../README.md`](../README.md). This file is an appendix for the two
+things that did not fit there — the agent's prompt discipline and the sandbox threat model.
 
-Z-FUZZ is designed as four layers with strict isolation between the untrusted contract
-under test and everything else.
+If anything here disagrees with the README, the README is correct.
 
+## The agent is a test generator, not an auditor
+
+The model is never asked to "find bugs". It is given one invariant in plain language and
+asked for a single `#[test]` that violates it, compiled against the harness crate. The
+output is constrained to a test block; prose is rejected rather than parsed.
+
+The scenario the agent works from today:
+
+> after `set_amount` stores a value in temporary storage and the ledger advances far past
+> its TTL, `read_amount` must return 0 rather than a stale value
+
+The harness (`sandbox/harness/src/lib.rs`) deliberately mirrors the same value into
+persistent storage and falls back to it, so a naive read survives TTL expiry. The generated
+test advances the ledger sequence and asserts the value is gone. It fails, because the
+harness is wrong on purpose — that failure is the finding.
+
+This is the whole design principle: **a finding is a failing test or it is not a finding.**
+There is no confidence score, no severity heuristic, no "this might be exploitable". Either
+the sandbox produced a red `cargo test` or the lane reports clean.
+
+Cost of one scan: roughly 120 input and 200 output tokens against
+`gemini-3.5-flash-lite`, which is why the metered price per cycle is measured in fractions
+of a lira.
+
+## Sandbox threat model
+
+The sandbox executes model-generated Rust against a contract we did not write. Both are
+untrusted.
+
+| Control | Why |
+|---|---|
+| `network=none` | Generated code must not reach the anchor, the chain, the model API or the host network. This is also why real Blend v2 calls cannot simply be added — see the roadmap. |
+| Read-only mount of the generated test | The test cannot rewrite the harness to make itself pass. |
+| 30-second timeout | A generated test can trivially loop forever; the ledger-advance pattern makes it likely. |
+| Container destroyed after every run | No state survives between scans, so one scan cannot poison the next. |
+| Base image with deps pre-compiled | `sandbox/Dockerfile` pre-builds `soroban-sdk` so a scan is ~6s rather than a cold Rust build. |
+
+What this does **not** defend against: a malicious contract that exhausts host disk through
+the build cache, and resource limits are not set per container. Both are fine for a
+single-tenant demo and would need `--memory`, `--cpus` and a disk quota before this ran for
+anyone but us.
+
+## Why contract tests run in a container too
+
+Soroban test targets build as `cdylib`. On Windows the GNU linker fails on them with
+`export ordinal too large`, so `cargo test` on `contracts/registry` cannot run on the dev
+host at all — while `stellar contract build`, which targets wasm, works fine. The repo
+therefore standardises on running every Rust test in `rust:1-slim`:
+
+```bash
+docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \
+  sh -c "rustup target add wasm32v1-none && cargo test"
 ```
-Browser (Next.js)
-  |  wallet connect, SEP-6 deposit, scan config, WebSocket log stream
-  v
-Orchestrator (Node.js + BullMQ + Redis)
-  |  x402 metering, job queue, anchor client, stream fan-out
-  v
-Agent (hosted model API)
-  |  atomic prompt chain: AST map -> auth paths -> scenario -> #[test]
-  v
-Sandbox (ephemeral container, network=none)
-     cargo test against the target composed with Blend v2 / Soroswap
-```
 
-### Layer 1 — Frontend
-
-Next.js App Router, React 19, Tailwind 4. All screens are client components because the
-product surface is driven by live state (streaming logs, scan progress, budget depletion).
-Language state is shared through a context backed by `useSyncExternalStore` so a stored
-preference does not cause a hydration mismatch.
-
-### Layer 2 — Orchestrator (planned)
-
-Node.js with BullMQ over Redis. One scan is one job; each agent cycle and each sandbox run
-is a billable unit. An x402 middleware deducts from the user's TRYC balance per unit and
-halts the job when the budget is exhausted.
-
-### Layer 3 — Agent (planned)
-
-A hosted model API drives an **atomic prompt chain** rather than a single "find bugs" call:
-
-1. Map the AST, classify every storage entry as instance / persistent / temporary.
-2. Isolate `Address::require_auth()` paths and state read/write points.
-3. Generate a Soroban-specific scenario: expired TTL read, archived-entry access,
-   resurrection with stale data, wrong storage class.
-4. Generate a composability scenario that binds the target to a Blend v2 pool interface.
-
-Output is constrained to a `#[test]` block, never free prose.
-
-### Layer 4 — Sandbox (planned)
-
-Ephemeral container, `network=none`, target plus protocol interfaces mounted, `cargo test`
-run with a 30 second timeout, stdout/stderr captured, container destroyed.
-
----
-
-## Design decisions and tradeoffs
-
-### Static triage before the paid agent
-
-Free, local, Soroban-aware tools run first: **Scout (`scout-soroban`)**, `cargo-audit`,
-`clippy`. They narrow the search space so the metered agent only runs where something is
-suspicious.
-
-*Tradeoff:* adds a step and a dependency, but cuts cost per scan substantially and makes
-the x402 pricing story defensible.
-
-### Hosted model, not a local one
-
-A local uncensored model was considered and rejected. A hosted API needs no GPU, no model
-download and no VRAM budget, gives better code generation, and removes the single largest
-setup risk. The task itself — writing a failing test that proves a bug in *the user's own
-contract* — is ordinary defensive auditing and needs no special model.
-
-*Tradeoff:* contract source leaves the machine. Acceptable for the hackathon; an on-prem
-local model is the enterprise tier on the roadmap.
-
-### Integration is load-bearing, not decorative
-
-The headline finding is reproducible **only** when the target is composed with a Blend v2
-pool. A contract that looks correct in isolation over-borrows against collateral read from
-an archived entry. Removing Blend v2 removes the finding, which is the point.
-
-### Mock data before real integrations
-
-The product surface was built first so the end-to-end story is verifiable and the demo path
-is fixed before any credential exists. Every mock is labelled in the README status table.
-
-*Tradeoff:* nothing on chain yet. Mitigated by keeping the mock shapes identical to the
-planned API responses, so wiring is substitution rather than rewrite.
-
-### Seed corpus as demo insurance
-
-A hand-written corpus of property tests and one known-class composability scenario exists
-independently of model generation, so a live demo does not depend on a model call
-succeeding. Live generation is additive.
-
-### Typography as a semantic rule
-
-Monospace is reserved for machine output — terminal lines, code, test names, transaction
-hashes, contract addresses. Everything a human wrote is set in the interface typeface. The
-rule makes "this came from the machine" readable at a glance.
-
-### No gradients, glassmorphism or rounded friendly shapes
-
-The surface is an inspection tool. Angular panels, flat fills, hard rim light, and a
-restricted palette keyed to the product: cyan for agent activity, red for a confirmed
-vulnerability, green for a passing contract.
-
----
-
-## Known limitations
-
-- Backend, agent and sandbox are specified but not implemented.
-- The anchor deposit and x402 meter are interface only.
-- No Soroban contract is deployed; no testnet address is published.
-- Scan results are fixtures, not the output of a real run.
+The four registry tests (`records_and_reads_back`, `rescan_overwrites_previous_result`,
+`failing_scan_is_not_audited`, `unknown_contract_is_not_audited`) pass there, and their
+snapshots are committed under `contracts/registry/test_snapshots/`.

@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { FloatingNav, SiteFooter } from "@/components/home/nav";
 import { LiveScan, type ScanReport } from "@/components/live-scan";
-import { AmountDisplay, Button, Kicker, Panel, StatusPill, TxLink } from "@/components/ui";
+import { AmountDisplay, Button, Kicker, Panel, StatusPill } from "@/components/ui";
 import { useLang } from "@/components/lang";
-import { finding } from "@/lib/mock";
 
 export default function ScanPage() {
   const { t } = useLang();
   const [report, setReport] = useState<ScanReport | null>(null);
   const done = report !== null;
   const vulnerable = report?.vulnerable ?? false;
+  const billing = report?.billing ?? { cycles: 0, spent: 0, budget: 20, durationMs: 0 };
+  const testName = report?.sandbox.log.find((l) => /^test\s+\S+\s+\.\.\./.test(l))?.split(/\s+/)[1];
 
   return (
     <>
@@ -38,17 +39,17 @@ export default function ScanPage() {
             <div className="border border-line bg-surface p-5">
               <div className="mb-3 flex items-center justify-between text-[11px] text-fg-3">
                 <span>{t("term.budget")}</span>
-                <span className="text-agent">{finding.spent.toFixed(1)} / {finding.budget} TRYC</span>
+                <span className="text-agent">{billing.spent.toFixed(1)} / {billing.budget} TRYC</span>
               </div>
               <div className="h-1.5 w-full bg-inset">
                 <div
                   className="h-full bg-agent transition-all duration-700"
-                  style={{ width: `${(finding.spent / finding.budget) * 100}%` }}
+                  style={{ width: `${Math.min(100, (billing.spent / billing.budget) * 100)}%` }}
                 />
               </div>
               <div className="mt-3 flex justify-between text-[12px]">
                 <span className="text-fg-3">{t("hero7.cycles")}</span>
-                <span className="tabular-nums text-fg">{finding.cycles}</span>
+                <span className="tabular-nums text-fg">{billing.cycles}</span>
               </div>
             </div>
 
@@ -56,14 +57,11 @@ export default function ScanPage() {
               <div className="rise glow-danger bg-surface p-5">
                 <StatusPill tone="danger" pulse>{t("hero7.critical")}</StatusPill>
                 <h2 className="font-display mt-4 text-2xl text-fg">{t("hero7.title")}</h2>
-                <p className="mono mt-3 text-sm text-danger">{finding.name}</p>
+                <p className="mono mt-3 text-sm text-danger">{testName ?? report?.sandbox.summary}</p>
                 <p className="mt-2 text-sm leading-relaxed text-fg-2">{t("hero7.desc")}</p>
                 <div className="mt-4 flex items-center justify-between border-t border-line pt-4 text-[12px]">
                   <span className="text-fg-3">{t("hero7.bill")}</span>
-                  <AmountDisplay value={finding.spent.toFixed(1)} unit="TRYC" tone="danger" />
-                </div>
-                <div className="mt-3">
-                  <TxLink hash={finding.contract} />
+                  <AmountDisplay value={billing.spent.toFixed(1)} unit="TRYC" tone="danger" />
                 </div>
                 <div className="mt-5 flex flex-col gap-2">
                   <Button href="/scan/demo/patch" variant="danger">{t("hero7.patch")}</Button>

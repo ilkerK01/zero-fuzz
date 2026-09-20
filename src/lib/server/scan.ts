@@ -6,7 +6,37 @@ export type ScanStep = {
   agent: string;
   tone: "agent" | "ok" | "danger" | "muted";
   text: string;
+  cost?: number;
 };
+
+export type Billing = {
+  cycles: number;
+  spent: number;
+  budget: number;
+  durationMs: number;
+};
+
+const UNIT_PRICE: Record<string, number> = {
+  static: 0,
+  "agent-1": 0.4,
+  "agent-2": 1.1,
+  sandbox: 0.3,
+};
+
+const BUDGET = 20;
+
+function bill(steps: ScanStep[], durationMs: number): Billing {
+  let spent = 0;
+  let cycles = 0;
+  for (const step of steps) {
+    const price = UNIT_PRICE[step.agent] ?? 0;
+    if (price === 0) continue;
+    step.cost = price;
+    spent += price;
+    cycles += 1;
+  }
+  return { cycles, spent: Math.round(spent * 100) / 100, budget: BUDGET, durationMs };
+}
 
 export type ScanReport = {
   steps: ScanStep[];
@@ -14,12 +44,14 @@ export type ScanReport = {
   sandbox: SandboxResult;
   vulnerable: boolean;
   sandboxAvailable: boolean;
+  billing: Billing;
 };
 
 const DEFAULT_SCENARIO =
   "after set_amount stores a value in temporary storage and the ledger advances far past its TTL, read_amount must return 0 rather than a stale value";
 
 export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> {
+  const startedAt = Date.now();
   const steps: ScanStep[] = [];
   steps.push({ agent: "static", tone: "muted", text: "scout-soroban + cargo-audit: narrowing search space" });
   steps.push({ agent: "agent-1", tone: "agent", text: "mapping storage entries and auth paths" });
@@ -46,6 +78,7 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
       },
       vulnerable: false,
       sandboxAvailable: false,
+      billing: bill(steps, Date.now() - startedAt),
     };
   }
 
@@ -69,5 +102,6 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
     sandbox,
     vulnerable: sandbox.compiled && sandbox.failed > 0,
     sandboxAvailable: true,
+    billing: bill(steps, Date.now() - startedAt),
   };
 }

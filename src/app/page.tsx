@@ -16,8 +16,9 @@ import { Eyebrow, GradientText, Pill, techStrip, WaveLines } from "@/components/
 import { useLang } from "@/components/lang";
 
 const partners = [
-  { code: "BLD", en: "Blend v2", tr: "Blend v2", kind: { en: "Lending pool", tr: "Borç havuzu" }, live: true },
-  { code: "SWP", en: "Soroswap", tr: "Soroswap", kind: { en: "DEX / price", tr: "DEX / fiyat" }, live: true },
+  { code: "HRN", en: "Pool harness", tr: "Havuz harness'i", kind: { en: "Local lending pool", tr: "Yerel borç havuzu" }, live: true },
+  { code: "BLD", en: "Blend v2", tr: "Blend v2", kind: { en: "Lending pool", tr: "Borç havuzu" }, live: false },
+  { code: "SWP", en: "Soroswap", tr: "Soroswap", kind: { en: "DEX / price", tr: "DEX / fiyat" }, live: false },
   { code: "DFX", en: "DeFindex", tr: "DeFindex", kind: { en: "Yield vault", tr: "Getiri kasası" }, live: false },
   { code: "AQU", en: "Aquarius", tr: "Aquarius", kind: { en: "AMM", tr: "AMM" }, live: false },
   { code: "RFL", en: "Reflector", tr: "Reflector", kind: { en: "Oracle feed", tr: "Oracle beslemesi" }, live: false },
@@ -169,8 +170,8 @@ export default function LandingPage() {
       >
         <p className="-mt-4 mb-8 max-w-2xl text-lg leading-relaxed text-fg-2">
           {tr
-            ? "Headline zafiyetimiz Blend v2 olmadan üretilemez. Entegrasyon dekor değil, hatanın kendisi."
-            : "Our headline vulnerability cannot be produced without Blend v2. The integration is not decoration, it is the bug."}
+            ? "Headline zafiyetimiz kontrat tek başınayken üretilemez; ancak bir havuzla bileşince ortaya çıkar. Bileşim dekor değil, hatanın kendisi. Bugün yerel harness ile koşuyor, testnet protokolleri sırada."
+            : "Our headline vulnerability cannot be produced by the contract alone — it only appears once it is composed with a pool. Composition is not decoration, it is the bug. It runs against a local harness today; testnet protocols are next."}
         </p>
         <div className="overflow-x-auto border border-line">
           <table className="w-full min-w-[560px] text-left text-sm">

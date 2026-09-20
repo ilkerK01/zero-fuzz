@@ -31,7 +31,7 @@ export function WhyItMatters() {
             <p className="mono mt-1 text-[12px] text-agent">narrowing search space</p>
           </div>
           <div className="glow-danger absolute top-36 left-28 w-72 bg-surface p-4">
-            <p className="mono text-[10px] text-fg-3">sandbox · blend_v2</p>
+            <p className="mono text-[10px] text-fg-3">sandbox · zf_harness</p>
             <p className="mono mt-2 text-[13px] text-danger">test_resurrection_drain</p>
             <p className="mono mt-1 text-[12px] text-danger">... FAILED</p>
           </div>
@@ -113,7 +113,7 @@ function Code() {
       {"  "}lanes: [<S>&quot;state&quot;</S>, <S>&quot;composability&quot;</S>],
     </>,
     <>
-      {"  "}compose: [<S>&quot;blend_v2&quot;</S>, <S>&quot;soroswap&quot;</S>], <C>{"// eligible partners"}</C>
+      {"  "}compose: [<S>&quot;pool_harness&quot;</S>], <C>{"// blend_v2, soroswap next"}</C>
     </>,
     <>
       {"  "}budget: <N>20</N>, <C>{"// TRYC, x402 metered"}</C>
@@ -159,8 +159,8 @@ export function ForDevelopers() {
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-fg-2">
             {tr
-              ? "Taramayı başlat, akışı dinle. Kapsülü, Blend v2 bileşimini, ajan döngüsünü ve x402 faturasını Z-FUZZ halleder. CI'ına bir adım olarak koy."
-              : "Start a scan, listen to the stream. Z-FUZZ handles the sandbox, the Blend v2 composition, the agent loop and the x402 billing. Drop it into CI as one step."}
+              ? "Taramayı başlat, akışı dinle. Kapsülü, bileşimi, ajan döngüsünü ve x402 faturasını Z-FUZZ halleder. CI'ına bir adım olarak koy."
+              : "Start a scan, listen to the stream. Z-FUZZ handles the sandbox, the composition, the agent loop and the x402 billing. Drop it into CI as one step."}
           </p>
           <Link
             href="/scan/new"
@@ -193,8 +193,8 @@ const lanes = [
     bg: "#FF5C5C",
     ink: "#060708",
     d: {
-      en: "Your contract against a live Blend v2 pool and Soroswap price. Where YieldBlox died.",
-      tr: "Kontratın canlı Blend v2 havuzu ve Soroswap fiyatına karşı. YieldBlox'un öldüğü yer.",
+      en: "Your contract against a lending-pool harness today, Blend v2 and Soroswap next. Where YieldBlox died.",
+      tr: "Kontratın bugün borç havuzu harness'ine, sırada Blend v2 ve Soroswap'a karşı. YieldBlox'un öldüğü yer.",
     },
     s: [30, 50, 20],
   },
@@ -322,7 +322,7 @@ export function BugClasses() {
     ["State archival", tr ? "Arşivlenmiş entry'ye erişim" : "Access to an archived entry", "ok"],
     ["Resurrection", tr ? "Restore sonrası stale değer" : "Stale value after restore", "ok"],
     ["Storage type", tr ? "temporary yerine persistent" : "temporary used as persistent", "ok"],
-    ["Composability", tr ? "Blend v2 / Soroswap etkileşimi" : "Blend v2 / Soroswap interaction", "agent"],
+    ["Composability", tr ? "Havuz harness'i; sırada Blend v2 / Soroswap" : "Pool harness; Blend v2 / Soroswap next", "agent"],
     ["Auth paths", tr ? "Eksik require_auth" : "Missing require_auth", "agent"],
   ];
   return (

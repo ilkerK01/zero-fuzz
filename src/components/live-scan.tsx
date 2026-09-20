@@ -10,6 +10,7 @@ export type ScanReport = {
   sandbox: { compiled: boolean; failed: number; summary: string; log: string[] };
   vulnerable: boolean;
   sandboxAvailable: boolean;
+  billing: { cycles: number; spent: number; budget: number; durationMs: number };
 };
 
 const toneClass: Record<ScanStep["tone"], string> = {

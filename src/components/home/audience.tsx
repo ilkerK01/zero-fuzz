@@ -62,8 +62,8 @@ const audiences: Audience[] = [
     tab: { en: "Protocol teams", tr: "Protokol ekipleri" },
     head: { en: "Regressions fail CI, not mainnet.", tr: "Regresyonlar CI'da patlar, ana ağda değil." },
     body: {
-      en: "Every pull request runs the same lanes. A composability regression against Blend v2 shows up as a red build hours before it could show up as a drained pool.",
-      tr: "Her pull request aynı kulvarları koşar. Blend v2'ye karşı bir composability regresyonu, boşalmış bir havuz olarak görünmeden saatler önce kırmızı build olarak görünür.",
+      en: "Every pull request runs the same lanes. A composability regression shows up as a red build hours before it could show up as a drained pool.",
+      tr: "Her pull request aynı kulvarları koşar. Bir composability regresyonu, boşalmış bir havuz olarak görünmeden saatler önce kırmızı build olarak görünür.",
     },
     points: [
       { en: "One step in your pipeline", tr: "Pipeline'ında tek adım" },
@@ -92,7 +92,7 @@ const audiences: Audience[] = [
       tr: "Likiditeyi başkasının kontratından geçirmeden önce onu canlı bir havuzla koştur ve state makinesinin baskı altında ne yaptığını gör.",
     },
     points: [
-      { en: "Blend v2 and Soroswap interfaces", tr: "Blend v2 ve Soroswap arayüzleri" },
+      { en: "Blend v2 and Soroswap interfaces (roadmap)", tr: "Blend v2 ve Soroswap arayüzleri (yol haritası)" },
       { en: "The YieldBlox class, reproduced", tr: "YieldBlox sınıfı, yeniden üretilmiş" },
     ],
   },

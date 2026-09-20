@@ -14,12 +14,12 @@ export const scanLog: LogLine[] = [
   { agent: "agent-2", tone: "agent", text: "generating #[test] for TTL expiry on `collateral`", cost: 1.1 },
   { agent: "sandbox", tone: "muted", text: "spawning air-gapped container rust:1.86 (network=none)", cost: 0.2 },
   { agent: "sandbox", tone: "muted", text: "cargo test --color always ... 2 passed" },
-  { agent: "agent-2", tone: "agent", text: "composing target against blend_v2 pool interface", cost: 1.4 },
+  { agent: "agent-2", tone: "agent", text: "binding target to local pool harness (zf_harness::RegistryPool)", cost: 1.4 },
   { agent: "agent-2", tone: "agent", text: "archiving `collateral` entry, advancing ledger past TTL", cost: 0.7 },
   { agent: "sandbox", tone: "muted", text: "cargo test test_resurrection_drain --color always", cost: 0.3 },
   { agent: "sandbox", tone: "danger", text: "test_resurrection_drain ... FAILED" },
   { agent: "agent-2", tone: "danger", text: "panic: over-borrow accepted on stale collateral (+412%)" },
-  { agent: "agent-2", tone: "danger", text: "vulnerability confirmed — drained 41,200 USDC in sandbox" },
+  { agent: "agent-2", tone: "danger", text: "vulnerability confirmed — over-borrow reproduced in sandbox" },
 ];
 
 export const finding = {

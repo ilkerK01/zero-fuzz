@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FloatingNav, SiteFooter } from "@/components/home/nav";
 import { LiveScan, type ScanReport } from "@/components/live-scan";
-import { AmountDisplay, Button, Kicker, Panel, StatusPill } from "@/components/ui";
+import { AmountDisplay, Button, Kicker, Panel, StatusPill, TxLink } from "@/components/ui";
 import { useLang } from "@/components/lang";
 
 export default function ScanPage() {
@@ -63,6 +63,19 @@ export default function ScanPage() {
                   <span className="text-fg-3">{t("hero7.bill")}</span>
                   <AmountDisplay value={billing.spent.toFixed(1)} unit="TRYC" tone="danger" />
                 </div>
+                {report?.audit ? (
+                  <div className="mt-4 border-t border-line pt-4">
+                    <p className="text-[11px] text-fg-3">
+                      {t("scan.recorded")}
+                    </p>
+                    <div className="mt-2">
+                      <TxLink
+                        hash={report.audit.txHash}
+                        href={`https://stellar.expert/explorer/testnet/tx/${report.audit.txHash}`}
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-5 flex flex-col gap-2">
                   <Button href="/scan/demo/patch" variant="danger">{t("hero7.patch")}</Button>
                   <p className="text-center text-[11px] text-fg-3">

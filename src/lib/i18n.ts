@@ -122,6 +122,7 @@ const en = {
   "hero7.critical": "CRITICAL",
   "hero7.bill": "x402 billing summary",
   "hero7.cycles": "Agent cycles",
+  "scan.recorded": "Audit written to the on-chain registry",
   "hero7.patch": "View proposed patch",
   "hero7.cert": "Certificate blocked until patched",
 
@@ -298,6 +299,7 @@ const tr: typeof en = {
   "hero7.critical": "KRİTİK",
   "hero7.bill": "x402 fatura özeti",
   "hero7.cycles": "Ajan döngüsü",
+  "scan.recorded": "Denetim zincirdeki kayda yazıldı",
   "hero7.patch": "Önerilen yamayı gör",
   "hero7.cert": "Sertifika yama yapılana dek kilitli",
 

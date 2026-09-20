@@ -11,6 +11,8 @@ export type ScanReport = {
   vulnerable: boolean;
   sandboxAvailable: boolean;
   billing: { cycles: number; spent: number; budget: number; durationMs: number };
+  audit: { txHash: string; wasmHash: string; resultHash: string; passed: boolean; lanes: number } | null;
+  auditError: string | null;
 };
 
 const toneClass: Record<ScanStep["tone"], string> = {

@@ -1,6 +1,7 @@
 import "server-only";
 import { generateTest } from "./gemini";
 import { dockerAvailable, runTest, type SandboxResult } from "./sandbox";
+import { record, type AuditRecord } from "./registry";
 
 export type ScanStep = {
   agent: string;
@@ -25,6 +26,8 @@ const UNIT_PRICE: Record<string, number> = {
 
 const BUDGET = 20;
 
+const LANES = 1;
+
 function bill(steps: ScanStep[], durationMs: number): Billing {
   let spent = 0;
   let cycles = 0;
@@ -45,6 +48,8 @@ export type ScanReport = {
   vulnerable: boolean;
   sandboxAvailable: boolean;
   billing: Billing;
+  audit: AuditRecord | null;
+  auditError: string | null;
 };
 
 const DEFAULT_SCENARIO =
@@ -79,6 +84,8 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
       vulnerable: false,
       sandboxAvailable: false,
       billing: bill(steps, Date.now() - startedAt),
+      audit: null,
+      auditError: null,
     };
   }
 
@@ -96,12 +103,33 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
     steps.push({ agent: "agent-2", tone: "ok", text: "no violation on this lane" });
   }
 
+  const vulnerable = sandbox.compiled && sandbox.failed > 0;
+
+  let audit: AuditRecord | null = null;
+  let auditError: string | null = null;
+  try {
+    audit = await record(`${testSource}
+${sandbox.summary}`, !vulnerable, LANES);
+    if (audit) {
+      steps.push({
+        agent: "registry",
+        tone: audit.passed ? "ok" : "danger",
+        text: `audit recorded on chain: ${audit.txHash}`,
+      });
+    }
+  } catch (error) {
+    auditError = error instanceof Error ? error.message : "audit record failed";
+    steps.push({ agent: "registry", tone: "muted", text: `on-chain record skipped: ${auditError}` });
+  }
+
   return {
     steps,
     testSource,
     sandbox,
-    vulnerable: sandbox.compiled && sandbox.failed > 0,
+    vulnerable,
     sandboxAvailable: true,
     billing: bill(steps, Date.now() - startedAt),
+    audit,
+    auditError,
   };
 }

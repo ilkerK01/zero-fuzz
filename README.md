@@ -77,6 +77,8 @@ rather than with a consultant's calendar.
 
 **The answer ships with the fix.** Every finding carries a proposed patch, and a contract
 that comes back clean gets an audit record on chain that anyone can verify independently.
+Every scan that reaches a verdict writes that verdict to the registry itself — the result
+panel links the transaction.
 
 ---
 
@@ -107,7 +109,13 @@ destroyed. The terminal streams the real `cargo test` output.
 ### 4 · Proof, patch, certificate
 
 A red test is a confirmed vulnerability and ships with the patch that closes it. A contract
-that passes gets its result written to the on-chain registry.
+that passes gets its result written to the on-chain registry. The scan submits that
+transaction itself; the result panel links it.
+
+The record is written by `src/lib/server/registry.ts` over Soroban RPC and confirmed before
+the scan returns. A scan that never reached a verdict — for example on the hosted build,
+where there is no container runtime — writes nothing rather than recording an audit that did
+not happen.
 
 ![Proposed patch](docs/screens/03-patch.png)
 
@@ -163,6 +171,7 @@ Everything below is live on **Stellar testnet** and independently verifiable.
 | **Wasm hash** | `830ceac9398cfa94814090625d905e8faa26ee6be905e82465876aead15b1427` |
 | **Deploy tx** | [`fdb63979…bb55`](https://stellar.expert/explorer/testnet/tx/fdb63979e331a349c52c7c4af1bf2ff7ef40099f2c9b63421bc9b8294afabb55) |
 | **First audit written** | [`9bfb6d2a…f059e`](https://stellar.expert/explorer/testnet/tx/9bfb6d2a5e494083519ad230450adb66ab81e49edfa5addb76ddc554a62f059e) |
+| **Audit written by a scan** | [`c60b1b60…ae67`](https://stellar.expert/explorer/testnet/tx/c60b1b60cbd747f0bd0ae1ba7c67fc1028ab9acb812838ca592be376c393ae67) |
 | **App account** | [`GDCASV6Z…56DI`](https://stellar.expert/explorer/testnet/account/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI) |
 | **Anchor** | `tr-mock-anchor.fly.dev` · SEP-10 + SEP-6 · TRY → USDC |
 | **Network** | `Test SDF Network ; September 2015` · soroban-sdk 28 |
@@ -258,7 +267,7 @@ curl -s "https://horizon-testnet.stellar.org/accounts/GDCASV6ZLIMNVIAHPXMXSS7UGS
 |---|---|
 | **Integration** — build on an eligible Stellar protocol | **Stellar Wallets Kit** (Wallets category, Eligible Integration Partners). The user connects their own wallet and signs the SEP-10 challenge client-side; we never hold their key. Verified with Freighter. |
 | **Anchor / Local Payments** — a real fiat rail | **SEP-10 + SEP-6 against a TRY anchor, both directions.** Turkish lira in → USDC on testnet (three settlements on chain), and USDC → Turkish lira out, which settles today in seconds. |
-| **Core Feature** — the integration is load-bearing | A scan is metered work: model calls and container runs cost money, and that money is the anchor balance. Without the fiat rail there is nothing to spend and no scan to run. The wallet integration is how a user proves ownership of the contract they are paying to audit, and the result is written to the on-chain registry under their key. |
+| **Core Feature** — the integration is load-bearing | A scan is metered work: model calls and container runs cost money, and that money is the anchor balance. Without the fiat rail there is nothing to spend and no scan to run. The wallet integration is how a user proves ownership of the contract they are paying to audit, and each scan that reaches a verdict writes that verdict to the on-chain registry. |
 
 The per-cycle deduction from the balance is metered but not yet submitted as a payment; see
 the status table below and the roadmap.
@@ -282,7 +291,7 @@ This table is the reference for every other claim in this repository.
 | Agent → sandbox full loop, real PASS/FAIL | Working end to end, ~6s per scan |
 | x402 metering, cycles and cost | Computed from the real run |
 | x402 **deduction** from the on-chain balance | Not wired — balance is real, debit is not submitted |
-| Soroban audit registry on testnet | Deployed, 4 unit tests, writes audits on chain |
+| Soroban audit registry on testnet | Deployed, 4 unit tests; a scan with a verdict writes its result on chain |
 | Composability lane against Blend v2 / Soroswap | Not implemented — the lane runs against a local pool harness |
 
 The vulnerability description text on the result panel is still a fixed string; the test

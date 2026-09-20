@@ -1,5 +1,5 @@
 import "server-only";
-import { Horizon, Keypair, Networks, TransactionBuilder } from "@stellar/stellar-sdk";
+import { Asset, Horizon, Keypair, Memo, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 
 export class AnchorError extends Error {
   status: number;
@@ -152,4 +152,93 @@ export async function settle(id: string, token: string, tries = 45): Promise<Anc
     }
   }
   return last;
+}
+
+export type WithdrawQuote = {
+  id: string;
+  destination: string;
+  memo: string;
+  memoType: string;
+  iban: string;
+  rate: string | null;
+  feePercent: number;
+};
+
+export async function startWithdraw(amount: string, token: string): Promise<WithdrawQuote> {
+  const { anchor, address, code } = config();
+  const url = new URL(`${anchor}/sep6/withdraw`);
+  url.searchParams.set("asset_code", code);
+  url.searchParams.set("account", address);
+  url.searchParams.set("type", "bank_account");
+  url.searchParams.set("amount", amount);
+  const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  const text = await res.text();
+  if (!res.ok) throw new AnchorError(`SEP-6 withdraw failed (${res.status}): ${text.slice(0, 160)}`);
+  const data = JSON.parse(text) as {
+    id: string;
+    account_id?: string;
+    memo?: string;
+    memo_type?: string;
+    fee_percent?: number;
+    extra_info?: { message?: string };
+  };
+  if (!data.account_id || !data.memo || !data.memo_type) {
+    throw new AnchorError("Anchor did not return payment instructions for the withdrawal");
+  }
+  const message = data.extra_info?.message ?? "";
+  const rate = message.match(/Rate ([\d.]+) TRY\/USDC/)?.[1] ?? null;
+  const iban = message.match(/\b(TR\d{24})\b/)?.[1] ?? "";
+  return {
+    id: data.id,
+    destination: data.account_id,
+    memo: data.memo,
+    memoType: data.memo_type,
+    iban,
+    rate,
+    feePercent: data.fee_percent ?? 0,
+  };
+}
+
+function memoFor(quote: WithdrawQuote): Memo {
+  if (quote.memoType === "id") return Memo.id(String(quote.memo));
+  if (quote.memoType === "text") return Memo.text(String(quote.memo));
+  if (quote.memoType === "hash") return Memo.hash(Buffer.from(quote.memo, "base64"));
+  throw new AnchorError(`Anchor asked for an unsupported memo type: ${quote.memoType}`);
+}
+
+function submitError(error: unknown): AnchorError {
+  const extras = (error as { response?: { data?: { extras?: Record<string, unknown> } } })?.response?.data?.extras;
+  const codes = extras?.result_codes as { transaction?: string; operations?: string[] } | undefined;
+  if (codes) {
+    const detail = [codes.transaction, ...(codes.operations ?? [])].filter(Boolean).join(", ");
+    if (detail.includes("op_underfunded")) {
+      return new AnchorError("Not enough USDC on the account for this withdrawal", 400);
+    }
+    return new AnchorError(`Stellar rejected the payment: ${detail}`);
+  }
+  return new AnchorError(error instanceof Error ? error.message : "Payment submission failed");
+}
+
+export async function payAnchor(quote: WithdrawQuote, amount: string): Promise<string> {
+  const { secret, address, code, issuer } = config();
+  const keypair = Keypair.fromSecret(secret);
+  const account = await horizon.loadAccount(address);
+  const tx = new TransactionBuilder(account, { fee: "10000", networkPassphrase: Networks.TESTNET })
+    .addOperation(
+      Operation.payment({
+        destination: quote.destination,
+        asset: new Asset(code, issuer),
+        amount,
+      }),
+    )
+    .addMemo(memoFor(quote))
+    .setTimeout(90)
+    .build();
+  tx.sign(keypair);
+  try {
+    const sent = await horizon.submitTransaction(tx);
+    return sent.hash;
+  } catch (error) {
+    throw submitError(error);
+  }
 }

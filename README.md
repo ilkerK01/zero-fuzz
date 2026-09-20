@@ -83,9 +83,41 @@ completed end to end:
 | 200 | 4.0792181 | [`fac32138…da4f`](https://stellar.expert/explorer/testnet/tx/fac32138ea93d230a8c22ed91e043103b51f5a0bbbcb9e332876f5c607f7da4f) |
 
 > **Known issue at submission time.** The shared `tr-mock-anchor` instance stopped draining
-> its payout queue on 20 Sep. New deposits authenticate and open correctly but stay in
-> `pending_anchor` on the anchor's side. Our client reports this honestly instead of faking
-> a balance. The three settlements above were completed before the stall and are on chain.
+> its **deposit** payout queue on 20 Sep. New deposits authenticate and open correctly, and
+> the anchor computes `amount_out`, but they stay in `pending_anchor` on its side. The three
+> settlements above completed before the stall and are on chain. Our client reports the stall
+> honestly instead of faking a balance.
+>
+> The **withdrawal** direction is unaffected and works today — see below. The handbook accepts
+> either direction: *"a user should be able to put real Turkish lira in and get a usable
+> balance out, or the reverse."*
+
+### Withdrawals (USDC → TRY) — working now
+
+The two directions are not symmetric. On a deposit the anchor moves the value, so a stalled
+payout queue blocks it. On a withdrawal **we** move the value: the app builds, signs and
+submits the Stellar payment, and the anchor only has to watch for it. Its watcher is alive,
+so this path settles in seconds.
+
+Run through the app at `/deposit` → **Cash out**:
+
+| USDC out | TRY paid | Rate | Payment tx |
+|---|---|---|---|
+| 1.0000000 | 48.54 | 48.541152 TRY/USDC | [`9cd84cb6…`](https://stellar.expert/explorer/testnet/tx/9cd84cb6367b3085ecd796ec478582743cf52e4e9eba0aeb04c38b1dfee3b21c) |
+
+The anchor returns `status: completed` with `amount_out: 48.54` and the TRY is paid to the
+IBAN it quoted. Verify the payment leg on chain:
+
+```bash
+curl -s "https://horizon-testnet.stellar.org/accounts/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI/payments?order=desc&limit=3"   | jq '._embedded.records[] | {created_at, asset_code, amount, from, to}'
+# -> USDC 1.0000000 from GDCASV6Z... (app account) to GCLCZEQZ... (anchor)
+```
+
+One implementation note worth recording: the anchor quotes `memo_type: "id"`. Sending the
+same value as a `MEMO_TEXT` produces a valid on-chain payment that the anchor's watcher
+never matches, and the withdrawal sits in `pending_user_transfer_start` forever. The client
+branches on `memo_type` and refuses to guess — see `memoFor()` in
+[`src/lib/server/anchor.ts`](src/lib/server/anchor.ts).
 
 ---
 
@@ -156,7 +188,7 @@ not a line item but a drained pool is fatal.
 | Requirement | How Z-FUZZ meets it |
 |---|---|
 | **Integration** — build on an eligible Stellar protocol | **Stellar Wallets Kit** (Wallets category, Eligible Integration Partners). The user connects their own wallet and signs the SEP-10 challenge client-side; we never hold their key. Verified with Freighter. |
-| **Anchor / Local Payments** — a real fiat rail | **SEP-10 + SEP-6 against a TRY anchor.** Turkish lira in, USDC on testnet out, on chain. Three settlements above. |
+| **Anchor / Local Payments** — a real fiat rail | **SEP-10 + SEP-6 against a TRY anchor, both directions.** Turkish lira in → USDC on testnet (three settlements on chain), and USDC → Turkish lira out, which settles today in seconds. |
 | **Core Feature** — the integration is load-bearing | A scan is metered work: model calls and container runs cost money, and that money is the anchor balance. Without the fiat rail there is nothing to spend and no scan to run. The wallet integration is how a user proves ownership of the contract they are paying to audit, and the result is written to the on-chain registry under their key. |
 
 Honest caveat on Core Feature: the per-cycle **deduction** from the on-chain balance is not
@@ -177,7 +209,8 @@ claim in this repository.
 | Passkey sign-in (WebAuthn) | Working (bonus feature per handbook) |
 | Wallet connect (Stellar Wallets Kit) + client-signed SEP-10 | Working, verified with Freighter |
 | SEP-10 authentication against the anchor | Working, live on testnet |
-| SEP-6 deposit, TRY → USDC | Working; three settlements on chain. Anchor payout queue currently stalled upstream |
+| SEP-6 deposit, TRY → USDC | Three settlements on chain; anchor's payout queue stalled upstream since 20 Sep |
+| SEP-6 withdrawal, USDC → TRY | Working end to end, settles in seconds, `completed` with TRY paid out |
 | Agent (Gemini) generates a Rust `#[test]` | Working (`gemini-3.5-flash-lite`) |
 | Docker sandbox runs `cargo test`, `network=none` | Working (soroban-sdk 28, 30s timeout) |
 | Agent → sandbox full loop, real PASS/FAIL | Working end to end, ~6s per scan |
@@ -350,7 +383,7 @@ zero-fuzz/
 |---|---|
 | `/` | Landing |
 | `/dashboard` | Dashboard, passkey-gated |
-| `/deposit` | Add scan credit through the anchor |
+| `/deposit` | Add scan credit, or cash out back to a bank account |
 | `/scan/new` | Upload contract, select lanes |
 | `/scan/[id]` | Live agent terminal, then the result |
 | `/scan/[id]/patch` | Proposed patch, diff view |
@@ -360,6 +393,7 @@ zero-fuzz/
 |---|---|---|
 | `GET` | `/api/anchor` | Account address and live USDC balance |
 | `POST` | `/api/anchor` | SEP-10 auth, SEP-6 deposit, settle, return the transaction |
+| `POST` | `/api/anchor/withdraw` | SEP-10 auth, SEP-6 withdraw quote, sign and submit the payment, settle |
 | `GET` | `/api/anchor/challenge` | SEP-10 challenge for a connected wallet address |
 | `POST` | `/api/anchor/challenge` | Submit the wallet-signed challenge, return the token |
 | `POST` | `/api/scan` | Run one scan; returns steps, test source, sandbox result, billing |

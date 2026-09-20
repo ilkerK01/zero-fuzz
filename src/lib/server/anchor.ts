@@ -1,5 +1,5 @@
 import "server-only";
-import { Asset, Horizon, Keypair, Memo, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
+import { Asset, Horizon, Keypair, Memo, Networks, Operation, StrKey, TransactionBuilder } from "@stellar/stellar-sdk";
 
 export class AnchorError extends Error {
   status: number;
@@ -27,13 +27,43 @@ export function config() {
 
 const horizon = new Horizon.Server("https://horizon-testnet.stellar.org");
 
+export type BalanceView = {
+  address: string;
+  code: string;
+  balance: string;
+  funded: boolean;
+  trustline: boolean;
+};
+
 export async function balance(): Promise<string> {
-  const { address, code, issuer } = config();
-  const account = await horizon.loadAccount(address);
-  const row = account.balances.find(
-    (b) => "asset_code" in b && b.asset_code === code && b.asset_issuer === issuer,
-  );
-  return row ? row.balance : "0";
+  const { address } = config();
+  return (await balanceOf(address)).balance;
+}
+
+export async function balanceOf(account: string): Promise<BalanceView> {
+  const { code, issuer } = config();
+  if (!StrKey.isValidEd25519PublicKey(account)) {
+    throw new AnchorError("That is not a valid Stellar public key", 400);
+  }
+  try {
+    const loaded = await horizon.loadAccount(account);
+    const row = loaded.balances.find(
+      (b) => "asset_code" in b && b.asset_code === code && b.asset_issuer === issuer,
+    );
+    return {
+      address: account,
+      code,
+      balance: row ? row.balance : "0",
+      funded: true,
+      trustline: Boolean(row),
+    };
+  } catch (error) {
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status === 404) {
+      return { address: account, code, balance: "0", funded: false, trustline: false };
+    }
+    throw new AnchorError("Could not read that account from Horizon");
+  }
 }
 
 export async function sep10Token(): Promise<string> {

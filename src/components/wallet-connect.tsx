@@ -3,14 +3,15 @@
 import { useState } from "react";
 import { useLang } from "@/components/lang";
 import { connectWallet, signChallenge } from "@/lib/wallet";
+import { useWallet } from "@/components/wallet";
 
 type State = "idle" | "connecting" | "connected" | "verifying" | "verified" | "error";
 
 export function WalletConnect() {
   const { lang } = useLang();
   const tr = lang === "tr";
-  const [state, setState] = useState<State>("idle");
-  const [address, setAddress] = useState<string | null>(null);
+  const { address, verified, connect: remember, markVerified, disconnect } = useWallet();
+  const [state, setState] = useState<State>(verified ? "verified" : address ? "connected" : "idle");
   const [error, setError] = useState<string | null>(null);
 
   const short = address ? `${address.slice(0, 4)}…${address.slice(-4)}` : "";
@@ -20,7 +21,7 @@ export function WalletConnect() {
     setState("connecting");
     try {
       const addr = await connectWallet();
-      setAddress(addr);
+      remember(addr);
       setState("connected");
     } catch (e) {
       if (e instanceof Error && e.message === "cancelled") {
@@ -52,6 +53,7 @@ export function WalletConnect() {
       });
       const out = (await verifyRes.json()) as { verified?: boolean; error?: string };
       if (!verifyRes.ok || !out.verified) throw new Error(out.error);
+      markVerified();
       setState("verified");
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : tr ? "Doğrulama başarısız" : "Verification failed");
@@ -95,6 +97,16 @@ export function WalletConnect() {
             : tr ? "Anchor ile doğrula" : "Verify with anchor"}
         </button>
       )}
+      <button
+        onClick={() => {
+          disconnect();
+          setState("idle");
+          setError(null);
+        }}
+        className="rounded-full border border-line-strong px-3 py-1.5 text-xs text-fg-3 transition hover:border-danger hover:text-danger"
+      >
+        {tr ? "Ayır" : "Disconnect"}
+      </button>
       {error ? <span className="text-xs text-danger">{error}</span> : null}
     </div>
   );

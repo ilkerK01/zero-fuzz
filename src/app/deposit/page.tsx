@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FloatingNav, SiteFooter } from "@/components/home/nav";
 import { AmountDisplay, Kicker, StatusPill, TxLink } from "@/components/ui";
 import { useLang } from "@/components/lang";
+import { useWallet } from "@/components/wallet";
 
 const amounts = [500, 1000, 2000, 3000];
 const usdcAmounts = [1, 5, 10];
@@ -36,6 +37,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export default function DepositPage() {
   const { t, lang } = useLang();
+  const { address: wallet } = useWallet();
   const tr = lang === "tr";
   const [tab, setTab] = useState<"in" | "out">("in");
   const [amount, setAmount] = useState(1000);
@@ -45,20 +47,34 @@ export default function DepositPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [withdrawn, setWithdrawn] = useState<WithdrawResult | null>(null);
+  const [source, setSource] = useState<{ connected: boolean; funded: boolean; trustline: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/anchor");
-        const data = (await res.json()) as { balance?: string };
-        if (!cancelled && res.ok) setBalance(data.balance ?? "0");
+        const url = wallet ? `/api/anchor?address=${wallet}` : "/api/anchor";
+        const res = await fetch(url);
+        const data = (await res.json()) as {
+          balance?: string;
+          connected?: boolean;
+          funded?: boolean;
+          trustline?: boolean;
+        };
+        if (!cancelled && res.ok) {
+          setBalance(data.balance ?? "0");
+          setSource({
+            connected: Boolean(data.connected),
+            funded: data.funded !== false,
+            trustline: data.trustline !== false,
+          });
+        }
       } catch {}
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [wallet]);
 
   const refreshBalance = async () => {
     try {
@@ -222,11 +238,32 @@ export default function DepositPage() {
           )}
 
           {balance !== null ? (
-            <div className="mt-6 flex items-center justify-between border-t border-line pt-6">
-              <span className="text-[11px] text-fg-3">
-                {tab === "in" ? t("dep.balance") : t("wd.available")}
-              </span>
-              <AmountDisplay value={Number(balance).toFixed(2)} unit="USDC" tone="ok" size="lg" />
+            <div className="mt-6 border-t border-line pt-6">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-fg-3">
+                  {tab === "in" ? t("dep.balance") : t("wd.available")}
+                </span>
+                <AmountDisplay value={Number(balance).toFixed(2)} unit="USDC" tone="ok" size="lg" />
+              </div>
+              <div className="mono mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                <span className={source?.connected ? "text-ok" : "text-fg-3"}>
+                  {source?.connected ? t("bal.connected") : t("bal.app")}
+                </span>
+                {wallet ? (
+                  <span className="text-fg-3">
+                    {wallet.slice(0, 4)}…{wallet.slice(-4)}
+                  </span>
+                ) : null}
+              </div>
+              {source?.connected && !source.funded ? (
+                <p className="mt-2 text-[11px] text-danger">{t("bal.unfunded")}</p>
+              ) : null}
+              {source?.connected && source.funded && !source.trustline ? (
+                <p className="mt-2 text-[11px] text-danger">{t("bal.notrust")}</p>
+              ) : null}
+              {!source?.connected ? (
+                <p className="mt-2 text-[11px] text-fg-3">{t("bal.hint")}</p>
+              ) : null}
             </div>
           ) : null}
 

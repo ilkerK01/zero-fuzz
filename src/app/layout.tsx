@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { LangProvider } from "@/components/lang";
+import { WalletProvider } from "@/components/wallet";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin", "latin-ext"] });
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geist.variable} ${jetbrains.variable} h-full`}>
       <body className="flex min-h-full flex-col bg-base text-fg">
-        <LangProvider>{children}</LangProvider>
+        <LangProvider>
+          <WalletProvider>{children}</WalletProvider>
+        </LangProvider>
       </body>
     </html>
   );

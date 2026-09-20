@@ -183,6 +183,11 @@ const en = {
   "wd.sent": "Sent",
   "wd.paid": "Paid out",
   "wd.max": "Max",
+  "bal.connected": "Your connected wallet",
+  "bal.app": "Shared demo account",
+  "bal.unfunded": "This account does not exist on testnet yet. Fund it with friendbot.",
+  "bal.notrust": "No USDC trustline on this account yet.",
+  "bal.hint": "Connect a wallet on the dashboard to see your own balance.",
 };
 
 const tr: typeof en = {
@@ -368,6 +373,11 @@ const tr: typeof en = {
   "wd.sent": "Gönderilen",
   "wd.paid": "Ödenen",
   "wd.max": "Tümü",
+  "bal.connected": "Bağlı cüzdanın",
+  "bal.app": "Ortak demo hesabı",
+  "bal.unfunded": "Bu hesap testnet'te henüz yok. Friendbot ile fonla.",
+  "bal.notrust": "Bu hesapta henüz USDC trustline yok.",
+  "bal.hint": "Kendi bakiyeni görmek için panelden cüzdanını bağla.",
 };
 
 export const dict: Record<Lang, typeof en> = { en, tr };

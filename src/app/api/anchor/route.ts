@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   AnchorError,
   balance,
+  balanceOf,
   config,
   sep10Token,
   settle,
@@ -18,10 +19,22 @@ function fail(error: unknown) {
   return NextResponse.json({ error: message }, { status });
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const asked = req.nextUrl.searchParams.get("address");
+    if (asked) {
+      const view = await balanceOf(asked);
+      return NextResponse.json({ ...view, connected: true });
+    }
     const { address, code } = config();
-    return NextResponse.json({ address, code, balance: await balance() });
+    return NextResponse.json({
+      address,
+      code,
+      balance: await balance(),
+      funded: true,
+      trustline: true,
+      connected: false,
+    });
   } catch (error) {
     return fail(error);
   }

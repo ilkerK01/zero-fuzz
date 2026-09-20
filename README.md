@@ -100,9 +100,10 @@ writing a test aimed at one invariant.
 
 ### 3 · Run it where it cannot do harm
 
-The generated test is mounted read-only into an ephemeral container with `network=none` and
-a 30-second timeout, compiled against the harness crate, executed, and the container is
-destroyed. The terminal streams the real `cargo test` output.
+The generated test is compiled and executed in a sandbox: an ephemeral container when you
+run locally, a dedicated sandbox service on the hosted build. Builds are offline, every run
+is time-boxed, and the contract source is restored afterwards. The terminal streams the real
+`cargo test` output.
 
 ![Live agent terminal](docs/screens/02-terminal.png)
 
@@ -113,8 +114,8 @@ that passes gets its result written to the on-chain registry. The scan submits t
 transaction itself; the result panel links it.
 
 The record is written by `src/lib/server/registry.ts` over Soroban RPC and confirmed before
-the scan returns. A scan that never reached a verdict — for example on the hosted build,
-where there is no container runtime — writes nothing rather than recording an audit that did
+the scan returns. A scan that never reached a verdict — for example when no sandbox
+is reachable — writes nothing rather than recording an audit that did
 not happen.
 
 ![Proposed patch](docs/screens/03-patch.png)
@@ -136,7 +137,7 @@ flowchart TD
   ANCHOR["TRY anchor — SEP-10 + SEP-6"]
   HORIZON["Stellar testnet — Horizon"]
   GEMINI["Agent — Gemini 3.5 Flash-Lite"]
-  SANDBOX["Docker sandbox — network=none, 30s timeout"]
+  SANDBOX["Sandbox — local container or hosted sandbox service"]
   REGISTRY["Soroban audit registry — testnet"]
 
   BROWSER --> PASSKEY
@@ -155,7 +156,7 @@ flowchart TD
   GEMINI -->|"constrained test block, mounted read-only"| SANDBOX
   SANDBOX -->|"cargo test output, PASS or FAIL"| SCAN
 
-  HORIZON -.->|"deployed, not invoked by the app at runtime"| REGISTRY
+  SCAN -->|"verdict, over Soroban RPC"| REGISTRY
 ```
 
 ---
@@ -172,6 +173,8 @@ Everything below is live on **Stellar testnet** and independently verifiable.
 | **Deploy tx** | [`fdb63979…bb55`](https://stellar.expert/explorer/testnet/tx/fdb63979e331a349c52c7c4af1bf2ff7ef40099f2c9b63421bc9b8294afabb55) |
 | **First audit written** | [`9bfb6d2a…f059e`](https://stellar.expert/explorer/testnet/tx/9bfb6d2a5e494083519ad230450adb66ab81e49edfa5addb76ddc554a62f059e) |
 | **Audit written by a scan** | [`c60b1b60…ae67`](https://stellar.expert/explorer/testnet/tx/c60b1b60cbd747f0bd0ae1ba7c67fc1028ab9acb812838ca592be376c393ae67) |
+| **Audit written from the live app** | [`abdf6dc8…e7a0`](https://stellar.expert/explorer/testnet/tx/abdf6dc8bef4d0433398e689faa0e4950ca5d97de5950181d149d7aad79ee7a0) |
+| **Sandbox service** | `https://zf-sandbox.onrender.com/health` |
 | **App account** | [`GDCASV6Z…56DI`](https://stellar.expert/explorer/testnet/account/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI) |
 | **Anchor** | `tr-mock-anchor.fly.dev` · SEP-10 + SEP-6 · TRY → USDC |
 | **Network** | `Test SDF Network ; September 2015` · soroban-sdk 28 |
@@ -222,28 +225,21 @@ is_audited(wasm_hash) -> bool                            // returns true on chai
 
 ### Anchor settlements (real testnet transactions)
 
-A developer deposits Turkish lira and receives USDC on Stellar. These three deposits
-completed end to end:
+A developer deposits Turkish lira and receives USDC on Stellar. These deposits completed
+end to end:
 
 | TRY in | USDC out | Transaction |
 |---|---|---|
 | 1,000 | 20.3960908 | [`7f1672a9…c287`](https://stellar.expert/explorer/testnet/tx/7f1672a94d5de65d205bb69e89fb807b7401ec332f517a8f3e2e1c505be5c287) |
 | 500 | 10.1980454 | [`b0d04ff5…4749`](https://stellar.expert/explorer/testnet/tx/b0d04ff5cfb6417fe982594e68d64dfb143dbb7a0d2ef84ef299ac1ade2a4749) |
 | 200 | 4.0792181 | [`fac32138…da4f`](https://stellar.expert/explorer/testnet/tx/fac32138ea93d230a8c22ed91e043103b51f5a0bbbcb9e332876f5c607f7da4f) |
+| 50 | 1.0198045 | [`22abcdc1…8d65`](https://stellar.expert/explorer/testnet/tx/22abcdc1186a7d46c1be5848789536b75775be2d101335eeb2de247716008d65) |
 
-> **Upstream status.** The shared `tr-mock-anchor` instance stopped draining its **deposit**
-> payout queue on 20 Sep: new deposits authenticate and open, and the anchor computes
-> `amount_out`, but they stay in `pending_anchor` on its side. The settlements above
-> completed before that and are on chain. The app surfaces the stall rather than showing a
-> balance that has not arrived. The **withdrawal** direction is unaffected and settles in
-> seconds — see below.
+### Withdrawals (USDC → TRY)
 
-### Withdrawals (USDC → TRY) — working now
-
-The two directions are not symmetric. On a deposit the anchor moves the value, so a stalled
-payout queue blocks it. On a withdrawal **we** move the value: the app builds, signs and
-submits the Stellar payment, and the anchor only has to watch for it. Its watcher is alive,
-so this path settles in seconds.
+The two directions are not symmetric. On a deposit the anchor moves the value and the app
+waits for it. On a withdrawal **we** move the value: the app builds, signs and submits the
+Stellar payment, and the anchor only has to observe it.
 
 Run through the app at `/deposit` → **Cash out**:
 
@@ -284,14 +280,17 @@ This table is the reference for every other claim in this repository.
 | Passkey sign-in (WebAuthn) | Working (bonus feature per handbook) |
 | Wallet connect (Stellar Wallets Kit) + client-signed SEP-10 | Working, verified with Freighter |
 | SEP-10 authentication against the anchor | Working, live on testnet |
-| SEP-6 deposit, TRY → USDC | Three settlements on chain; anchor's payout queue stalled upstream since 20 Sep |
+| SEP-6 deposit, TRY → USDC | Working, settles on chain in about ten seconds |
 | SEP-6 withdrawal, USDC → TRY | Working end to end, settles in seconds, `completed` with TRY paid out |
 | Agent (Gemini) generates a Rust `#[test]` | Working (`gemini-3.5-flash-lite`) |
-| Docker sandbox runs `cargo test`, `network=none` | Working (soroban-sdk 28, 30s timeout) |
-| Agent → sandbox full loop, real PASS/FAIL | Working end to end, ~6s per scan |
+| Sandbox runs `cargo test` | Working — local Docker (`network=none`) or the hosted sandbox service |
+| Agent → sandbox → registry, real PASS/FAIL | Working end to end on the live app, about 25s per scan |
+| Connected wallet balance | Working — the credit screen shows the connected wallet's own USDC |
 | x402 metering, cycles and cost | Computed from the real run |
 | x402 **deduction** from the on-chain balance | Not wired — balance is real, debit is not submitted |
 | Soroban audit registry on testnet | Deployed, 4 unit tests; a scan with a verdict writes its result on chain |
+| Deposit and cash-out from the connected wallet | Not yet — both move the shared demo account |
+| Scanning an uploaded contract | The sandbox service compiles uploaded source; the app does not send it yet |
 | Composability lane against Blend v2 / Soroswap | Not implemented — the lane runs against a local pool harness |
 
 The vulnerability description text on the result panel is still a fixed string; the test
@@ -305,20 +304,15 @@ from the actual run.
 Five minutes, no setup:
 
 1. **Open the live app** — [https://zero-fuzz-risein1.vercel.app](https://zero-fuzz-risein1.vercel.app) — and walk `/` → `/deposit` → `/scan/new`.
-2. **Run a scan.** `/scan/new` → start. The agent really calls the model and returns a real
-   Rust test. The hosted build cannot execute it (serverless has no container runtime) and
-   says so instead of faking a pass.
-3. **Cash out through the anchor.** `/deposit` → **Cash out** → 1 USDC. This settles for
-   real: USDC leaves the account on chain, the anchor pays TRY, and the result panel links
-   the Stellar transaction.
+2. **Run a scan.** `/scan/new` → start. The agent writes a Rust test, the sandbox service
+   compiles and runs it, the contract fails, and the verdict is written to the registry —
+   the result panel links the transaction. About 25 seconds.
+3. **Move money through the anchor.** `/deposit` → deposit lira, or **Cash out** 1 USDC.
+   Both settle for real on chain and the result panel links the Stellar transaction.
 4. **Check the chain.** Every hash in [Deployed artifacts](#deployed-artifacts) resolves on
    stellar.expert, and the [verify commands](#verify-it-yourself) reproduce the numbers.
-5. **Watch a contract actually fail** — [the demo video](docs/demo/zero-fuzz-demo.mp4), or
-   run it locally with Docker via [Quick start](#quick-start).
-
-Deposits are currently stalled on the shared anchor's side, not ours — see the
-[upstream status note](#anchor-settlements-real-testnet-transactions). Use **Cash out** to
-see the fiat rail work.
+5. **Prefer to watch?** [The demo video](docs/demo/zero-fuzz-demo.mp4) shows the same flow,
+   and [Quick start](#quick-start) runs it locally.
 
 ---
 
@@ -337,8 +331,9 @@ npm run dev            # http://localhost:3100
 Then: sign in with a passkey → `/scan/new` → start a scan. The agent generates a Rust test,
 the sandbox runs it in a container, and the terminal shows the real `cargo test` output.
 
-Without Docker the app still authenticates, still calls the model and still returns the
-generated test — it reports that the test was not executed rather than pretending it ran.
+The sandbox runs in local Docker by default. To use a hosted one instead, deploy `sandbox/`
+anywhere that runs containers and set `ZF_SANDBOX_URL` and `ZF_SANDBOX_KEY`. With neither,
+the app still returns the generated test and says it was not executed.
 
 Checks:
 
@@ -370,7 +365,10 @@ docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \
 | `src/lib/server/scan.ts` | Orchestration: static triage → agent → sandbox → verdict → billing |
 | `src/lib/wallet.ts` | Stellar Wallets Kit setup and client-side signing |
 | `contracts/registry` | Soroban audit registry, `soroban-sdk 28`, 4 unit tests |
+| `src/lib/server/registry.ts` | Writes each verdict to the audit registry over Soroban RPC |
+| `src/components/wallet.tsx` | Connected-wallet state shared across the app |
 | `sandbox/harness` | The crate the generated tests compile against |
+| `sandbox/worker` | The hosted sandbox service: accepts a test, runs `cargo test`, returns the output |
 
 ### Stellar integrations used
 
@@ -414,9 +412,12 @@ machine. Fine for testnet code; an on-prem model is the enterprise tier on the r
 **A finding must be a failing test.** *Trade-off:* bugs that cannot be expressed as a test
 are missed, and every candidate costs compile time. In exchange there is nothing to triage.
 
-**The sandbox is offline.** We execute model-generated code against untrusted contracts, so
-there is no version of this that gets network access. *Trade-off:* the composability lane
-cannot reach a live protocol, which is why it runs against a local harness.
+**The sandbox gets no way out.** We execute model-generated code against untrusted
+contracts. Locally that is a container with `network=none`. The hosted sandbox service
+cannot drop its network namespace on its current host, so it relies on offline builds, a
+time box, one run at a time, a shared-secret gate and source restore after every run.
+*Trade-off:* the composability lane cannot reach a live protocol, which is why it runs
+against a local harness.
 
 **A local pool harness instead of Blend v2 on day one.** The composability lane needs a
 counterparty. Wiring real Blend v2 testnet calls into a container that has no network is a
@@ -436,11 +437,13 @@ next item after the x402 debit.
 
 **Running code we did not write, generated by a model we do not control.** Every scan
 compiles and executes Rust that a language model wrote, against a contract a stranger
-uploaded. Both are untrusted. The sandbox answers this with `network=none`, a read-only
+uploaded. Both are untrusted. Locally the sandbox answers this with `network=none`, a read-only
 mount so a test cannot rewrite the harness to make itself pass, a 30-second timeout because
 the ledger-advance pattern makes infinite loops likely, and a container destroyed after
 every run so one scan cannot poison the next. The cost of that isolation is that the lane
 cannot reach a live protocol — which is why composability runs against a local harness today.
+On the hosted build the same test runs in a dedicated sandbox service, because serverless
+functions cannot start containers.
 
 **Making a finding provable rather than plausible.** LLM-based auditing normally produces
 prose that a human then has to triage. We constrained the model to emit a `#[test]` block
@@ -477,7 +480,8 @@ zero-fuzz/
 │   └── deployments.json     # contract id, wasm hash, deploy + first-record tx
 ├── sandbox/
 │   ├── Dockerfile           # rust base image with soroban-sdk deps pre-compiled
-│   └── harness/             # the crate generated tests compile against
+│   ├── harness/             # the crate generated tests compile against
+│   └── worker/              # hosted sandbox service (Rust, tiny_http)
 ├── scripts/
 │   ├── setup.mjs            # testnet account + friendbot + USDC trustline
 │   ├── anchor.mjs           # SEP-10 + SEP-6 deposit from the CLI
@@ -507,7 +511,7 @@ zero-fuzz/
 
 | Method | Route | Purpose |
 |---|---|---|
-| `GET` | `/api/anchor` | Account address and live USDC balance |
+| `GET` | `/api/anchor` | Live USDC balance; `?address=` returns a connected wallet's own |
 | `POST` | `/api/anchor` | SEP-10 auth, SEP-6 deposit, settle, return the transaction |
 | `POST` | `/api/anchor/withdraw` | SEP-10 auth, SEP-6 withdraw quote, sign and submit the payment, settle |
 | `GET` | `/api/anchor/challenge` | SEP-10 challenge for a connected wallet address |
@@ -526,12 +530,17 @@ Ordered by what a paying user would notice first.
 1. **Wire the x402 debit.** Submit the payment per agent cycle and per sandbox run against
    the real USDC balance, and halt the job at `Budget Exceeded`. The metering already
    computes the amounts.
-2. **Real Blend v2 composability.** Pin a Blend v2 testnet pool state into the sandbox image
+2. **Money on the connected wallet.** Route deposits to the visitor's own account and have
+   their wallet sign the cash-out, instead of the shared demo account.
+3. **Scan the uploaded contract.** The sandbox service already compiles uploaded source;
+   the agent needs to read it and derive the invariants itself.
+4. **Real Blend v2 composability.** Pin a Blend v2 testnet pool state into the sandbox image
    so the lane composes against the real protocol without giving the container network.
-3. **Feed the result panel from the report.** The remaining fixed strings go.
-4. **Persist passkeys and scans.** Both are in memory today, which is fine for a demo and
-   not for anything else.
-5. **CI action.** `z-fuzz scan` as one step in a pull request, which is where this tool
+5. **Network-isolated hosted sandbox.** Move the service to a host that allows dropping the
+   network namespace, matching the local container.
+6. **Feed the result panel from the report.** The remaining fixed strings go.
+7. **Persist passkeys and scans.** Both are in memory today.
+8. **CI action.** `z-fuzz scan` as one step in a pull request, which is where this tool
    actually belongs.
 
 **Next step after the hackathon:** SCF Build Award application, with the audit registry as
@@ -545,7 +554,7 @@ the public-good component.
 - **Stellar:** `@stellar/stellar-sdk` 14, Stellar Wallets Kit 1.9, SEP-6 + SEP-10
 - **Contracts:** Soroban, Rust, `soroban-sdk 28`, deployed to testnet
 - **Agent:** Gemini 3.5 Flash-Lite, constrained `#[test]` output
-- **Sandbox:** Docker, `rust:1-slim`, `network=none`
+- **Sandbox:** Docker, `rust:1-slim`, `network=none` locally; a small Rust service (`tiny_http`) when hosted
 - **Auth:** SimpleWebAuthn 13 (passkeys)
 
 Typography note: monospace is reserved for machine output — terminal lines, test names,
@@ -575,14 +584,12 @@ MIT — see [`LICENSE`](LICENSE).
 
 - **Track:** Genesis
 - **Live app:** [https://zero-fuzz-risein1.vercel.app](https://zero-fuzz-risein1.vercel.app)
-- **What works on the hosted build:** every page, the passkey flow, wallet connect, the
-  SEP-10 session, the live on-chain balance, and the full withdrawal path. A scan
-  authenticates, calls the model and returns a real generated Rust test.
-- **What does not, and why:** the sandbox. Serverless functions cannot start containers, so
-  the hosted build reports `container runtime not available on this host, test not executed`
-  instead of pretending the test ran. **To watch a contract actually fail, run it locally
-  with Docker** (see [Quick start](#quick-start)) or watch the demo video.
+- **What works on the hosted build:** the whole scan path — the agent writes the test, the
+  sandbox service runs it, the verdict is written on chain — plus passkeys, wallet connect
+  with client-signed SEP-10, the connected wallet's live balance, and the anchor in both
+  directions.
 - Environment variables for a hosted deploy: `ZF_ACCOUNT_SECRET`, `ZF_ACCOUNT_PUBLIC`,
-  `ZF_ANCHOR_URL`, `ZF_ASSET_CODE`, `ZF_ASSET_ISSUER`, `GEMINI_API_KEY`, `ZF_MODEL`.
+  `ZF_ANCHOR_URL`, `ZF_ASSET_CODE`, `ZF_ASSET_ISSUER`, `GEMINI_API_KEY`, `ZF_MODEL`,
+  `ZF_SANDBOX_URL`, `ZF_SANDBOX_KEY`.
 - Passkeys are bound to the domain and stored in memory, so register a new one on the
-  deployed host..
+  deployed host.

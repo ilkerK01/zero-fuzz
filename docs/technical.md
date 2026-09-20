@@ -49,6 +49,15 @@ the build cache, and resource limits are not set per container. Both are fine fo
 single-tenant demo and would need `--memory`, `--cpus` and a disk quota before this ran for
 anyone but us.
 
+### The hosted sandbox service
+
+Serverless functions cannot start containers, so the live app sends the generated test to a
+small service built from the same image (`sandbox/worker`). It keeps the controls that do
+not depend on the host: offline builds, a time box, one run at a time, a shared-secret gate,
+and the contract source restored after every run. Its current host does not allow dropping
+the network namespace, so `network=none` applies to local runs only; the service reports
+which mode it is in on `/health`.
+
 ## Why contract tests run in a container too
 
 Soroban test targets build as `cdylib`, which does not link on every host toolchain, while

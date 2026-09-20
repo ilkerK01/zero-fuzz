@@ -1,5 +1,5 @@
 import "server-only";
-import { generateTest } from "./gemini";
+import { generateTest, GeminiError } from "./gemini";
 import { dockerAvailable, runTest, type SandboxResult } from "./sandbox";
 import { record, type AuditRecord } from "./registry";
 
@@ -50,6 +50,8 @@ export type ScanReport = {
   billing: Billing;
   audit: AuditRecord | null;
   auditError: string | null;
+  modelAvailable: boolean;
+  modelError: string | null;
 };
 
 const DEFAULT_SCENARIO =
@@ -62,7 +64,31 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
   steps.push({ agent: "agent-1", tone: "agent", text: "mapping storage entries and auth paths" });
   steps.push({ agent: "agent-2", tone: "agent", text: "generating #[test] for the target invariant" });
 
-  const testSource = await generateTest(scenario);
+  let testSource: string;
+  try {
+    testSource = await generateTest(scenario);
+  } catch (error) {
+    const reason = error instanceof GeminiError ? error.message : "model could not be reached, no test generated";
+    steps.push({ agent: "agent-2", tone: "danger", text: reason });
+    return {
+      steps,
+      testSource: "",
+      sandbox: {
+        passed: false,
+        failed: 0,
+        compiled: false,
+        summary: "scan stopped before the sandbox",
+        log: [],
+      },
+      vulnerable: false,
+      sandboxAvailable: false,
+      billing: bill(steps, Date.now() - startedAt),
+      audit: null,
+      auditError: null,
+      modelAvailable: false,
+      modelError: reason,
+    };
+  }
   steps.push({ agent: "agent-2", tone: "agent", text: "test generated, handing off to sandbox" });
 
   if (!(await dockerAvailable())) {
@@ -86,6 +112,8 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
       billing: bill(steps, Date.now() - startedAt),
       audit: null,
       auditError: null,
+      modelAvailable: true,
+      modelError: null,
     };
   }
 
@@ -131,5 +159,7 @@ ${sandbox.summary}`, !vulnerable, LANES);
     billing: bill(steps, Date.now() - startedAt),
     audit,
     auditError,
+    modelAvailable: true,
+    modelError: null,
   };
 }

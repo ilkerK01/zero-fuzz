@@ -13,6 +13,8 @@ export type ScanReport = {
   billing: { cycles: number; spent: number; budget: number; durationMs: number };
   audit: { txHash: string; wasmHash: string; resultHash: string; passed: boolean; lanes: number } | null;
   auditError: string | null;
+  modelAvailable: boolean;
+  modelError: string | null;
 };
 
 const toneClass: Record<ScanStep["tone"], string> = {
@@ -54,10 +56,14 @@ export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
 
     (async () => {
       try {
+        let scenario: string | undefined;
+        try {
+          scenario = sessionStorage.getItem("zf-scenario") ?? undefined;
+        } catch {}
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(scenario ? { scenario } : {}),
         });
         const data = (await res.json()) as ScanReport & { error?: string };
         if (!res.ok) throw new Error(data.error ?? "scan failed");

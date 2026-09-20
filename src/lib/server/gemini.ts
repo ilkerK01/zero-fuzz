@@ -2,15 +2,27 @@ import "server-only";
 
 export class GeminiError extends Error {
   status: number;
-  constructor(message: string, status = 502) {
+  reason: string;
+  constructor(message: string, status = 502, reason = "unreachable") {
     super(message);
     this.status = status;
+    this.reason = reason;
   }
+}
+
+function describe(status: number): string {
+  if (status === 429) return "model quota exhausted, no test generated";
+  if (status === 401 || status === 403) return "model rejected our credentials, no test generated";
+  if (status === 404) return "configured model is unavailable, no test generated";
+  if (status >= 500) return "model provider is down, no test generated";
+  return "model could not be reached, no test generated";
 }
 
 function config() {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new GeminiError("GEMINI_API_KEY is not configured", 500);
+  if (!key) {
+    throw new GeminiError("model is not configured on this host, no test generated", 500, "unconfigured");
+  }
   const model = process.env.ZF_MODEL ?? "gemini-3.5-flash-lite";
   return { key, model };
 }
@@ -57,17 +69,25 @@ Use soroban_sdk::testutils as needed. Start with the use statements. Reply with 
 rust code block and nothing else.`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 900 },
-    }),
-  });
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 900 },
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+  } catch {
+    throw new GeminiError("model could not be reached, no test generated", 504, "unreachable");
+  }
 
   if (!res.ok) {
-    throw new GeminiError(`Gemini request failed (${res.status})`);
+    throw new GeminiError(describe(res.status), res.status === 429 ? 429 : 502,
+      res.status === 429 ? "quota" : "rejected");
   }
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -76,7 +96,7 @@ rust code block and nothing else.`;
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   const code = extractRust(text);
   if (!code.includes("#[test]")) {
-    throw new GeminiError("Model did not return a test");
+    throw new GeminiError("model replied without a test, nothing to run", 502, "empty");
   }
   return code;
 }

@@ -1,57 +1,135 @@
-# Z-FUZZ — Autonomous threat hunting for Soroban
+<p align="center">
+  <img src="public/logo.svg" alt="Z-FUZZ" width="420">
+</p>
 
-**Let our agents break your contract before mainnet does.**
+<p align="center"><b>Let our agents break your contract before mainnet does.</b></p>
 
-Z-FUZZ is an autonomous security auditor for Soroban smart contracts. You fund a scan with
-Turkish lira through a SEP-6 anchor, upload a contract, and an agent writes Rust tests that
-try to break it inside a sealed container. A finding is never a warning — it is a test that
-actually failed, followed by the patch that fixes it, and an audit record written on chain.
+<p align="center">Rise In x Stellar Pro Hackathon, Istanbul · <b>Genesis track</b></p>
 
-Rise In x Stellar Pro Hackathon, Istanbul · **Genesis track**
+---
+
+## What Z-FUZZ is
+
+An autonomous security auditor for Soroban smart contracts.
+
+You fund a scan with Turkish lira through a SEP-6 anchor, hand it a contract, and an agent
+spends that credit trying to break it. What comes back is not a report. It is a Rust test
+that compiled and failed against your contract, the patch that makes it pass, and an audit
+record written to a Soroban registry anyone can read back on chain.
 
 ![Z-FUZZ landing](docs/screens/01-hero.png)
 
 **Demo video:** [`docs/demo/zero-fuzz-demo.mp4`](docs/demo/zero-fuzz-demo.mp4) — 1:26, narrated
-and subtitled. A wallet connects, the SEP-10 challenge is signed in Freighter, a scan runs, and
-the contract fails inside the sandbox.
+and subtitled. A wallet connects, the SEP-10 challenge is signed in Freighter, a scan runs,
+and the contract fails inside the sandbox.
 
 ---
 
-## Why this exists
+## The problem
 
-**The problem.** Soroban has a state model the EVM never had. Entries carry a
-**time-to-live**. When it lapses the entry is **archived** — unreadable, but not gone. It
-can later be **restored**, and a contract that reads it without checking liveness gets a
-value that looks fine and is months stale.
+Soroban has a state model the EVM never had. Entries carry a **time-to-live**. When it
+lapses the entry is **archived** — unreadable, but not gone. It can later be **restored**,
+and a contract that reads it without checking liveness gets a value that looks fine and is
+months stale.
 
-Foundry, Echidna and Medusa cannot model any of this, not because they are weak but because
-on the EVM there is nothing to model: no TTL, no archival, no resurrection, no choice
-between instance, persistent and temporary storage. Every Soroban-specific failure mode
-falls outside what the mature tooling can even express.
+Foundry, Echidna and Medusa cannot model any of this. Not because they are weak, but
+because on the EVM there is nothing to model: no TTL, no archival, no resurrection, no
+choice between instance, persistent and temporary storage. Every Soroban-specific failure
+mode falls outside what the mature tooling can even express.
 
-And the expensive failures are not in one contract — they appear under **composition**:
+And the expensive failures are not in one contract. They appear under **composition**:
 
-> On 22 February 2026 a YieldBlox community pool built on Blend V2 read a stale oracle
-> value. A single transaction moved the price from \$1 to \$107 and drained **\$10.2M**.
-> The contract was not wrong in isolation. It was wrong in company.
+> On 22 February 2026 a YieldBlox DAO pool on Blend V2 priced collateral from a VWAP oracle
+> reading an illiquid market. One trade moved the price from about \$1 to \$106 and the pool
+> was drained of more than **\$10M**. Blend V2's core contracts were not at fault. The
+> configuration was wrong in company.
 
-Manual audits catch these. They also cost upwards of \$8,000 and take weeks, which is why
+Manual audits catch this class. They also start around \$8,000 and take weeks, which is why
 most contracts reach mainnet having had neither.
 
-**Who it is for.** Soroban teams shipping to mainnet without an audit budget — the long tail
-of hackathon projects, SCF grantees and small protocols where a \$8,000 audit is not a line
-item but a drained pool is fatal.
+**Who this is for.** Soroban teams shipping without an audit budget — the long tail of
+hackathon projects, SCF grantees and small protocols where \$8,000 is not a line item but a
+drained pool is fatal.
 
-**What we built.** An auditor that funds itself through a Turkish lira anchor and pays for
-its own compute per scan, so a review costs lira rather than an audit invoice. It hunts the
-Soroban-specific classes the EVM tools cannot express, and it proves each one by composing
-the contract, driving it into the dangerous state and running `cargo test` in a sealed
-container.
+---
 
-**Why it is different.** A finding is not a warning, a score or a paragraph of model prose.
-It is a Rust test that compiled and failed against the real contract, shipped with the patch
-that makes it pass and an audit record written to a Soroban registry that anyone can read
-back on chain. If the test did not go red, we do not report a finding.
+## Our solution
+
+Three commitments, and everything else follows from them.
+
+**A finding must be a failing test.** The agent is never allowed to report prose. Its output
+is constrained to a `#[test]` block, that test is compiled and executed against the real
+contract, and a finding exists only if `cargo test` went red. No confidence score, no
+severity guess, nothing for a human to triage. The artifact *is* the proof.
+
+**An audit should cost lira, not an invoice.** Free Soroban-aware tools run first and narrow
+the search space, then the metered agent works only where something is already suspicious.
+The scan is paid for from an anchor balance, per cycle, so the price scales with the work
+rather than with a consultant's calendar.
+
+**The answer ships with the fix.** Every finding carries a proposed patch, and a contract
+that comes back clean gets an audit record on chain that anyone can verify independently.
+
+---
+
+## How it works, step by step
+
+### 1 · Fund the scan through the anchor
+
+Turkish lira in, USDC scan credit out, over SEP-10 and SEP-6. Unused credit can be cashed
+back out to a bank account the same way. This is the fiat rail, and it is what pays for the
+compute in the next steps.
+
+![Add scan credit](docs/screens/05-deposit.png)
+
+### 2 · Triage, then hunt
+
+`scout-soroban`, `cargo-audit` and `clippy` run for free and mark the suspicious surface.
+Only then does the metered agent start, mapping storage classes and `require_auth` paths and
+writing a test aimed at one invariant.
+
+### 3 · Run it where it cannot do harm
+
+The generated test is mounted read-only into an ephemeral container with `network=none` and
+a 30-second timeout, compiled against the harness crate, executed, and the container is
+destroyed. The terminal streams the real `cargo test` output.
+
+![Live agent terminal](docs/screens/02-terminal.png)
+
+### 4 · Proof, patch, certificate
+
+A red test is a confirmed vulnerability and ships with the patch that closes it. A contract
+that passes gets its result written to the on-chain registry.
+
+![Proposed patch](docs/screens/03-patch.png)
+
+![Audit certificate](docs/screens/04-certificate.png)
+
+### The pieces, end to end
+
+```
+Browser — Next.js 16, React 19
+  passkey sign-in · Stellar Wallets Kit · SEP-6 deposit · scan config · live log view
+        │
+        ▼
+Route handlers — Next.js server runtime
+  /api/anchor       SEP-10 session + SEP-6 deposit + settlement
+  /api/anchor/challenge  SEP-10 challenge for a connected wallet, client-signed
+  /api/passkey      WebAuthn registration and authentication
+  /api/scan         runs one scan, returns steps + test source + sandbox result + billing
+        │
+        ▼
+Agent — Gemini 3.5 Flash-Lite
+  scenario → constrained #[test] output, never free prose
+        │
+        ▼
+Sandbox — ephemeral Docker container, network=none, 30s timeout
+  generated test mounted read-only over the harness crate, cargo test, container destroyed
+        │
+        ▼
+Soroban audit registry — testnet
+  record(wasm_hash, result_hash, passed, lanes), emits an `audit` event
+```
 
 ---
 
@@ -224,31 +302,7 @@ from the actual run.
 
 ---
 
-## Architecture
-
-```
-Browser — Next.js 16, React 19
-  passkey sign-in · Stellar Wallets Kit · SEP-6 deposit · scan config · live log view
-        │
-        ▼
-Route handlers — Next.js server runtime
-  /api/anchor       SEP-10 session + SEP-6 deposit + settlement
-  /api/anchor/challenge  SEP-10 challenge for a connected wallet, client-signed
-  /api/passkey      WebAuthn registration and authentication
-  /api/scan         runs one scan, returns steps + test source + sandbox result + billing
-        │
-        ▼
-Agent — Gemini 3.5 Flash-Lite
-  scenario → constrained #[test] output, never free prose
-        │
-        ▼
-Sandbox — ephemeral Docker container, network=none, 30s timeout
-  generated test mounted read-only over the harness crate, cargo test, container destroyed
-        │
-        ▼
-Soroban audit registry — testnet
-  record(wasm_hash, result_hash, passed, lanes), emits an `audit` event
-```
+## Technical reference
 
 ### Components and responsibilities
 
@@ -290,24 +344,19 @@ server, not the user. Signing client-side through Stellar Wallets Kit means the 
 belongs to the person whose contract is being audited. *Trade-off:* one more user
 interaction, and the flow depends on a wallet extension being installed.
 
-**Static triage before the paid agent.** `scout-soroban`, `cargo-audit` and `clippy` are
-free and Soroban-aware, so they narrow the search space and the metered agent only runs
-where something is already suspicious. *Trade-off:* an extra dependency, in exchange for a
-defensible cost per scan.
+**Static triage before the paid agent.** *Trade-off:* three extra toolchain dependencies,
+in exchange for a cost per scan we can defend.
 
 **A hosted model, not a local one.** No GPU, no model download, no VRAM budget, better code
 generation, and the largest setup risk removed. *Trade-off:* contract source leaves the
 machine. Fine for testnet code; an on-prem model is the enterprise tier on the roadmap.
 
-**A finding must be a failing test.** The agent is never allowed to report prose. Output is
-constrained to a `#[test]` block, and a finding exists only if that test compiled and
-failed. *Trade-off:* we miss bugs that cannot be expressed as a test, and we spend compile
-time on every candidate. In exchange there are no false positives to triage — the artifact
-is the proof.
+**A finding must be a failing test.** *Trade-off:* bugs that cannot be expressed as a test
+are missed, and every candidate costs compile time. In exchange there is nothing to triage.
 
-**The sandbox is offline.** `network=none`, read-only mount, 30-second timeout, container
-destroyed after every run. We are executing model-generated code against untrusted
-contracts; there is no version of that which gets network access.
+**The sandbox is offline.** We execute model-generated code against untrusted contracts, so
+there is no version of this that gets network access. *Trade-off:* the composability lane
+cannot reach a live protocol, which is why it runs against a local harness.
 
 **A local pool harness instead of Blend v2 on day one.** The composability lane needs a
 counterparty. Wiring real Blend v2 testnet calls into a container that has no network is a

@@ -34,6 +34,35 @@ Everything below is live on **Stellar testnet** and independently verifiable.
 
 Machine-readable copy: [`contracts/deployments.json`](contracts/deployments.json).
 
+### Verify it yourself
+
+Nothing here needs to be taken on trust. These commands hit public testnet endpoints and
+return the same values the tables claim.
+
+```bash
+# The contract, as stellar.expert indexed it.
+# wasm matches the hash above; errors is 0.
+curl -s https://api.stellar.expert/explorer/testnet/contract/CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ | jq
+# -> { creator, wasm: "830ceac9...1427", invocations: 2, events: 1, errors: 0 }
+
+# The audit record written on chain: an InvokeContract calling `record`.
+curl -s https://horizon-testnet.stellar.org/transactions/9bfb6d2a5e494083519ad230450adb66ab81e49edfa5addb76ddc554a62f059e/operations | jq '._embedded.records[].function'
+
+# An anchor settlement: USDC leaves the anchor and lands on the app account.
+curl -s https://horizon-testnet.stellar.org/transactions/7f1672a94d5de65d205bb69e89fb807b7401ec332f517a8f3e2e1c505be5c287/operations | jq '._embedded.records[] | {type, asset_code, amount, from, to}'
+# -> payment, USDC, 20.3960908, from GCLCZEQZ... (anchor), to GDCASV6Z... (app account)
+
+# Current balance on the app account.
+curl -s https://horizon-testnet.stellar.org/accounts/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI | jq '.balances'
+```
+
+Or read the same history in a browser: the
+[contract](https://stellar.expert/explorer/testnet/contract/CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ)
+and the [app account](https://stellar.expert/explorer/testnet/account/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI)
+on stellar.expert. The contract shows as `unverified` there because stellar.expert source
+validation has not been submitted for it; the wasm hash in the table is the check that ties
+[`contracts/registry`](contracts/registry) to what is deployed.
+
 Contract interface:
 
 ```rust

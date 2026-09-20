@@ -1,6 +1,6 @@
 import "server-only";
 import { generateTest, GeminiError } from "./gemini";
-import { dockerAvailable, runTest, type SandboxResult } from "./sandbox";
+import { runTest, sandboxMode, warmRemote, type SandboxResult } from "./sandbox";
 import { record, type AuditRecord } from "./registry";
 
 export type ScanStep = {
@@ -91,7 +91,13 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
   }
   steps.push({ agent: "agent-2", tone: "agent", text: "test generated, handing off to sandbox" });
 
-  if (!(await dockerAvailable())) {
+  const mode = await sandboxMode();
+  if (mode === "remote") {
+    steps.push({ agent: "sandbox", tone: "muted", text: "waking the sandbox service" });
+    await warmRemote();
+  }
+
+  if (mode === "none") {
     steps.push({
       agent: "sandbox",
       tone: "muted",
@@ -117,7 +123,11 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
     };
   }
 
-  steps.push({ agent: "sandbox", tone: "muted", text: "spawning air-gapped container (network=none)" });
+  steps.push({
+    agent: "sandbox",
+    tone: "muted",
+    text: mode === "remote" ? "running the test in the sandbox service" : "spawning air-gapped container (network=none)",
+  });
 
   const sandbox = await runTest(testSource);
 

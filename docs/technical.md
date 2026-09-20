@@ -51,10 +51,10 @@ anyone but us.
 
 ## Why contract tests run in a container too
 
-Soroban test targets build as `cdylib`. On Windows the GNU linker fails on them with
-`export ordinal too large`, so `cargo test` on `contracts/registry` cannot run on the dev
-host at all — while `stellar contract build`, which targets wasm, works fine. The repo
-therefore standardises on running every Rust test in `rust:1-slim`:
+Soroban test targets build as `cdylib`, which does not link on every host toolchain, while
+`stellar contract build` targets wasm and does. Rather than ship a platform caveat, the repo
+standardises on running every Rust test in `rust:1-slim`, so the result is the same on any
+machine with Docker:
 
 ```bash
 docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \

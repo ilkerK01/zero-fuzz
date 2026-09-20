@@ -538,4 +538,4 @@ MIT — see [`LICENSE`](LICENSE).
 - Environment variables for a hosted deploy: `ZF_ACCOUNT_SECRET`, `ZF_ACCOUNT_PUBLIC`,
   `ZF_ANCHOR_URL`, `ZF_ASSET_CODE`, `ZF_ASSET_ISSUER`, `GEMINI_API_KEY`, `ZF_MODEL`.
 - Passkeys are bound to the domain and stored in memory, so register a new one on the
-  deployed host.
+  deployed host..

@@ -17,6 +17,44 @@ the contract fails inside the sandbox.
 
 ---
 
+## Why this exists
+
+**The problem.** Soroban has a state model the EVM never had. Entries carry a
+**time-to-live**. When it lapses the entry is **archived** — unreadable, but not gone. It
+can later be **restored**, and a contract that reads it without checking liveness gets a
+value that looks fine and is months stale.
+
+Foundry, Echidna and Medusa cannot model any of this, not because they are weak but because
+on the EVM there is nothing to model: no TTL, no archival, no resurrection, no choice
+between instance, persistent and temporary storage. Every Soroban-specific failure mode
+falls outside what the mature tooling can even express.
+
+And the expensive failures are not in one contract — they appear under **composition**:
+
+> On 22 February 2026 a YieldBlox community pool built on Blend V2 read a stale oracle
+> value. A single transaction moved the price from \$1 to \$107 and drained **\$10.2M**.
+> The contract was not wrong in isolation. It was wrong in company.
+
+Manual audits catch these. They also cost upwards of \$8,000 and take weeks, which is why
+most contracts reach mainnet having had neither.
+
+**Who it is for.** Soroban teams shipping to mainnet without an audit budget — the long tail
+of hackathon projects, SCF grantees and small protocols where a \$8,000 audit is not a line
+item but a drained pool is fatal.
+
+**What we built.** An auditor that funds itself through a Turkish lira anchor and pays for
+its own compute per scan, so a review costs lira rather than an audit invoice. It hunts the
+Soroban-specific classes the EVM tools cannot express, and it proves each one by composing
+the contract, driving it into the dangerous state and running `cargo test` in a sealed
+container.
+
+**Why it is different.** A finding is not a warning, a score or a paragraph of model prose.
+It is a Rust test that compiled and failed against the real contract, shipped with the patch
+that makes it pass and an audit record written to a Soroban registry that anyone can read
+back on chain. If the test did not go red, we do not report a finding.
+
+---
+
 ## Deployed artifacts
 
 Everything below is live on **Stellar testnet** and independently verifiable.
@@ -144,33 +182,6 @@ Contract tests (see [Technical challenges](#technical-challenges) for why these 
 docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \
   sh -c "rustup target add wasm32v1-none && cargo test"
 ```
-
----
-
-## The problem
-
-Soroban has a state model the EVM never had. Entries carry a **time-to-live**. When it
-lapses the entry is **archived** — unreadable, but not gone. It can later be **restored**,
-and a contract that reads it without checking liveness gets a value that looks fine and is
-months stale.
-
-Foundry, Echidna and Medusa cannot model any of this, not because they are weak but because
-on the EVM there is nothing to model: no TTL, no archival, no resurrection, no choice
-between instance, persistent and temporary storage. Every Soroban-specific failure mode
-falls outside what the mature tooling can even express.
-
-And the expensive failures are not in one contract — they appear under **composition**:
-
-> On 22 February 2026 a YieldBlox community pool built on Blend V2 read a stale oracle
-> value. A single transaction moved the price from \$1 to \$107 and drained **\$10.2M**.
-> The contract was not wrong in isolation. It was wrong in company.
-
-Manual audits catch these. They also cost upwards of \$8,000 and take weeks, which is why
-most contracts reach mainnet having had neither.
-
-**Who this is for:** Soroban teams shipping to mainnet without an audit budget — the
-long tail of hackathon projects, SCF grantees and small protocols where a \$8,000 audit is
-not a line item but a drained pool is fatal.
 
 ---
 

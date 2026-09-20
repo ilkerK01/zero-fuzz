@@ -62,6 +62,7 @@ export async function record(
   resultSource: string,
   passed: boolean,
   lanes: number,
+  contractSource?: string,
 ): Promise<AuditRecord | null> {
   const secret = process.env.ZF_ACCOUNT_SECRET;
   const id = await contractId();
@@ -69,7 +70,7 @@ export async function record(
 
   const keypair = Keypair.fromSecret(secret);
   const server = new rpc.Server(RPC_URL);
-  const wasmHash = await targetHash();
+  const wasmHash = contractSource ? sha256(contractSource) : await targetHash();
   const resultHash = sha256(resultSource);
 
   const account = await server.getAccount(keypair.publicKey());

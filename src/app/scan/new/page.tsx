@@ -7,7 +7,7 @@ import { useLang } from "@/components/lang";
 
 type LaneKey = "state" | "auth" | "comp";
 
-const ACCEPT = [".rs", ".wasm", ".toml", ".txt"];
+const ACCEPT = [".rs"];
 const MAX_BYTES = 256 * 1024;
 
 const SCAN_PRICE = 1.4;
@@ -20,7 +20,7 @@ function formatSize(bytes: number) {
 export default function NewScanPage() {
   const { t } = useLang();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<{ name: string; size: number } | null>(null);
+  const [file, setFile] = useState<{ name: string; size: number; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -30,7 +30,7 @@ export default function NewScanPage() {
     { key: "comp", title: t("up.lane.comp"), desc: t("up.lane.comp.d"), live: false },
   ];
 
-  const accept = (picked: File | undefined) => {
+  const accept = async (picked: File | undefined) => {
     setError(null);
     if (!picked) return;
     const ext = picked.name.slice(picked.name.lastIndexOf(".")).toLowerCase();
@@ -42,7 +42,18 @@ export default function NewScanPage() {
       setError(t("up.toobig"));
       return;
     }
-    setFile({ name: picked.name, size: picked.size });
+    let text: string;
+    try {
+      text = await picked.text();
+    } catch {
+      setError(t("up.unreadable"));
+      return;
+    }
+    if (!text.includes("soroban_sdk") || !text.includes("#[contract]")) {
+      setError(t("up.notcontract"));
+      return;
+    }
+    setFile({ name: picked.name, size: picked.size, text });
   };
 
   return (
@@ -61,7 +72,7 @@ export default function NewScanPage() {
           onDrop={(e) => {
             e.preventDefault();
             setDragging(false);
-            accept(e.dataTransfer.files[0]);
+            void accept(e.dataTransfer.files[0]);
           }}
           className={`mt-8 grid-lines flex cursor-pointer flex-col items-center justify-center border border-dashed bg-surface p-12 text-center transition ${
             dragging ? "border-agent" : "border-line-strong hover:border-agent"
@@ -79,7 +90,7 @@ export default function NewScanPage() {
             type="file"
             accept={ACCEPT.join(",")}
             className="hidden"
-            onChange={(e) => accept(e.target.files?.[0])}
+            onChange={(e) => void accept(e.target.files?.[0])}
           />
         </label>
 
@@ -133,7 +144,7 @@ export default function NewScanPage() {
         </div>
 
         <p className="mt-6 border-l border-line-strong pl-4 text-[12px] leading-relaxed text-fg-3">
-          {t("up.note")}
+          {file ? t("up.note.loaded") : t("up.note.bundled")}
         </p>
 
         <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
@@ -141,7 +152,23 @@ export default function NewScanPage() {
             <span className="block text-[11px] text-fg-3">{t("up.est")}</span>
             <AmountDisplay value={`~${SCAN_PRICE.toFixed(1)}`} unit="TRYC" tone="agent" size="lg" />
           </div>
-          <Button href="/scan/demo" variant="primary">{t("up.start")}</Button>
+          <Button
+            href="/scan/demo"
+            variant="primary"
+            onClick={() => {
+              try {
+                if (file) {
+                  sessionStorage.setItem("zf-contract", file.text);
+                  sessionStorage.setItem("zf-target", file.name);
+                } else {
+                  sessionStorage.removeItem("zf-contract");
+                  sessionStorage.removeItem("zf-target");
+                }
+              } catch {}
+            }}
+          >
+            {t("up.start")}
+          </Button>
         </div>
       </main>
       <SiteFooter />

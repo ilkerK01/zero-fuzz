@@ -93,8 +93,9 @@ compute in the next steps.
 
 ### 2 · Hunt
 
-The agent is given the contract's interface and one invariant, and writes a single Rust test
-aimed at breaking it. Its output is constrained to a test block; prose is rejected.
+The agent reads the contract — yours if you upload a `.rs` file, a bundled vulnerable example
+otherwise — picks the invariant itself, and writes a single Rust test aimed at breaking it.
+Its output is constrained to a test block; prose is rejected.
 
 ### 3 · Run it where it cannot do harm
 
@@ -172,6 +173,7 @@ Everything below is live on **Stellar testnet** and independently verifiable.
 | **First audit written** | [`9bfb6d2a…f059e`](https://stellar.expert/explorer/testnet/tx/9bfb6d2a5e494083519ad230450adb66ab81e49edfa5addb76ddc554a62f059e) |
 | **Audit written by a scan** | [`c60b1b60…ae67`](https://stellar.expert/explorer/testnet/tx/c60b1b60cbd747f0bd0ae1ba7c67fc1028ab9acb812838ca592be376c393ae67) |
 | **Audit written from the live app** | [`abdf6dc8…e7a0`](https://stellar.expert/explorer/testnet/tx/abdf6dc8bef4d0433398e689faa0e4950ca5d97de5950181d149d7aad79ee7a0) |
+| **Audit of an uploaded contract** | [`93153264…f08b`](https://stellar.expert/explorer/testnet/tx/931532644af5ee555f767a6db25694aa542f541aeb72cd07d06ada6c588ef08b) |
 | **Sandbox service** | `https://zf-sandbox.onrender.com/health` |
 | **App account** | [`GDCASV6Z…56DI`](https://stellar.expert/explorer/testnet/account/GDCASV6ZLIMNVIAHPXMXSS7UGS3ONPOC37TODIZKI5F3CMWBHQ7O56DI) |
 | **Anchor** | `tr-mock-anchor.fly.dev` · SEP-10 + SEP-6 · TRY → USDC |
@@ -284,6 +286,7 @@ This table is the reference for every other claim in this repository.
 | Sandbox runs `cargo test` | Working — local Docker (`network=none`) or the hosted sandbox service |
 | Agent → sandbox → registry, real PASS/FAIL | Working end to end on the live app, about 25s per scan |
 | Connected wallet balance | Working — the credit screen shows the connected wallet's own USDC |
+| Scanning an uploaded `.rs` contract | Working — the agent reads the source and picks the invariant, the sandbox compiles that contract |
 | x402 metering, cycles and cost | One model call and one sandbox run, billed only when they actually happen |
 | x402 **deduction** from the on-chain balance | Not wired — balance is real, debit is not submitted |
 | Soroban audit registry on testnet | Deployed, 4 unit tests; a scan with a verdict writes its result on chain |
@@ -300,9 +303,10 @@ from the actual run.
 Five minutes, no setup:
 
 1. **Open the live app** — [https://zero-fuzz-risein1.vercel.app](https://zero-fuzz-risein1.vercel.app) — and walk `/` → `/deposit` → `/scan/new`.
-2. **Run a scan.** `/scan/new` → start. The agent writes a Rust test, the sandbox service
-   compiles and runs it, the contract fails, and the verdict is written to the registry —
-   the result panel links the transaction. About 25 seconds.
+2. **Run a scan.** `/scan/new` → upload a Soroban `.rs` contract, or just press start to scan
+   the bundled vulnerable example. The agent writes a Rust test for that contract, the
+   sandbox service compiles and runs it, and the verdict is written to the registry — the
+   result panel links the transaction. About 25 seconds.
 3. **Move money through the anchor.** `/deposit` → deposit lira, or **Cash out** 1 USDC.
    Both settle for real on chain and the result panel links the Stellar transaction.
 4. **Check the chain.** Every hash in [Deployed artifacts](#deployed-artifacts) resolves on
@@ -509,7 +513,7 @@ zero-fuzz/
 | `POST` | `/api/anchor/withdraw` | SEP-10 auth, SEP-6 withdraw quote, sign and submit the payment, settle |
 | `GET` | `/api/anchor/challenge` | SEP-10 challenge for a connected wallet address |
 | `POST` | `/api/anchor/challenge` | Submit the wallet-signed challenge, return the token |
-| `POST` | `/api/scan` | Run one scan; returns steps, test source, sandbox result, billing |
+| `POST` | `/api/scan` | Run one scan; an optional `{contract, name}` body scans uploaded source |
 | `GET/POST/DELETE` | `/api/passkey` | WebAuthn session lifecycle |
 
 </details>
@@ -525,17 +529,15 @@ Ordered by what a paying user would notice first.
    computes the amounts.
 2. **Money on the connected wallet.** Route deposits to the visitor's own account and have
    their wallet sign the cash-out.
-3. **Scan any uploaded contract.** The sandbox service already compiles uploaded source;
-   next the agent reads it and derives the invariants itself.
-4. **Static triage before the agent.** Run `scout-soroban`, `cargo-audit` and `clippy` first
+3. **Static triage before the agent.** Run `scout-soroban`, `cargo-audit` and `clippy` first
    so the metered agent only works where something is already suspicious.
-5. **Real Blend v2 composability.** Pin a Blend v2 testnet pool state into the sandbox image
+4. **Real Blend v2 composability.** Pin a Blend v2 testnet pool state into the sandbox image
    so the lane composes against the real protocol without giving the container network.
-6. **Network-isolated hosted sandbox.** Move the service to a host that allows dropping the
+5. **Network-isolated hosted sandbox.** Move the service to a host that allows dropping the
    network namespace, matching the local container.
-7. **Feed the result panel from the report.** The remaining fixed strings go.
-8. **Persist passkeys and scans.** Both are in memory today.
-9. **CI action.** `z-fuzz scan` as one step in a pull request, which is where this tool
+6. **Feed the result panel from the report.** The remaining fixed strings go.
+7. **Persist passkeys and scans.** Both are in memory today.
+8. **CI action.** `z-fuzz scan` as one step in a pull request, which is where this tool
    actually belongs.
 
 **Next step after the hackathon:** SCF Build Award application, with the audit registry as

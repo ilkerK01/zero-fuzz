@@ -15,6 +15,8 @@ export type ScanReport = {
   auditError: string | null;
   modelAvailable: boolean;
   modelError: string | null;
+  target: string;
+  uploaded: boolean;
 };
 
 const toneClass: Record<ScanStep["tone"], string> = {
@@ -24,10 +26,20 @@ const toneClass: Record<ScanStep["tone"], string> = {
   muted: "text-fg-2",
 };
 
-const PRE: ScanStep[] = [
-  { agent: "target", tone: "muted", text: "target: bundled example contract zf_harness" },
-  { agent: "agent", tone: "agent", text: "asking the model for a #[test] on the invariant" },
-];
+function readStoredTarget(): string | null {
+  try {
+    return sessionStorage.getItem("zf-target");
+  } catch {
+    return null;
+  }
+}
+
+function buildPre(target: string | null): ScanStep[] {
+  return [
+    { agent: "target", tone: "muted", text: `target: ${target ?? "bundled example contract zf_harness"}` },
+    { agent: "agent", tone: "agent", text: "asking the model for a #[test] on the invariant" },
+  ];
+}
 
 export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
   const { lang } = useLang();
@@ -42,9 +54,12 @@ export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
     if (started.current) return;
     started.current = true;
 
+    const storedTarget = readStoredTarget();
+    const pre = buildPre(storedTarget);
+
     let i = 0;
     const tick = setInterval(() => {
-      const step = PRE[i];
+      const step = pre[i];
       if (!step) {
         clearInterval(tick);
         return;
@@ -55,10 +70,16 @@ export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
 
     (async () => {
       try {
+        let payload: { contract: string; name: string } | Record<string, never> = {};
+        try {
+          const contract = sessionStorage.getItem("zf-contract");
+          const name = sessionStorage.getItem("zf-target");
+          if (contract && name) payload = { contract, name };
+        } catch {}
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(payload),
         });
         const data = (await res.json()) as ScanReport & { error?: string };
         if (!res.ok) throw new Error(data.error ?? "scan failed");
@@ -114,7 +135,15 @@ export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
         </div>
       ) : null}
 
-      {report && report.sandboxAvailable ? (
+      {report && report.sandboxAvailable && report.modelAvailable && !report.sandbox.compiled ? (
+        <p className="mt-3 text-danger">
+          {tr
+            ? "Üretilen test bu kontrata karşı derlenmedi, bu yüzden bir sonuca varılamadı."
+            : "The generated test did not compile against this contract, so no verdict was reached."}
+        </p>
+      ) : null}
+
+      {report && report.sandboxAvailable && !(report.modelAvailable && !report.sandbox.compiled) ? (
         <p className="mt-3 text-fg-3">
           {tr ? "kapsül kapatıldı" : "sandbox destroyed"} · {report.sandbox.summary}
         </p>

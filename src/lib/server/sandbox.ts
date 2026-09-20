@@ -13,6 +13,7 @@ export type SandboxResult = {
   compiled: boolean;
   summary: string;
   log: string[];
+  errors: string;
 };
 
 export type SandboxMode = "remote" | "docker" | "none";
@@ -25,6 +26,17 @@ function remoteConfig() {
   const url = process.env.ZF_SANDBOX_URL;
   const key = process.env.ZF_SANDBOX_KEY;
   return url && key ? { url: url.replace(/\/$/, ""), key } : null;
+}
+
+function extractErrors(output: string): string {
+  const lines = output.split("\n");
+  const start = lines.findIndex((l) => /error/i.test(l));
+  if (start === -1) return "";
+  const excerpt = lines
+    .slice(start, start + 60)
+    .join("\n")
+    .trim();
+  return excerpt.slice(0, 4000);
 }
 
 function parse(raw: string): SandboxResult {
@@ -55,6 +67,7 @@ function parse(raw: string): SandboxResult {
         ? `${failed} test(s) failed`
         : `${okCount} test(s) passed`,
     log,
+    errors: compiled ? "" : extractErrors(output),
   };
 }
 

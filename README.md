@@ -113,12 +113,6 @@ curl -s "https://horizon-testnet.stellar.org/accounts/GDCASV6ZLIMNVIAHPXMXSS7UGS
 # -> USDC 1.0000000 from GDCASV6Z... (app account) to GCLCZEQZ... (anchor)
 ```
 
-One implementation note worth recording: the anchor quotes `memo_type: "id"`. Sending the
-same value as a `MEMO_TEXT` produces a valid on-chain payment that the anchor's watcher
-never matches, and the withdrawal sits in `pending_user_transfer_start` forever. The client
-branches on `memo_type` and refuses to guess — see `memoFor()` in
-[`src/lib/server/anchor.ts`](src/lib/server/anchor.ts).
-
 ---
 
 ## Quick start

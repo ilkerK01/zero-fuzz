@@ -234,41 +234,6 @@ curl -s "https://horizon-testnet.stellar.org/accounts/GDCASV6ZLIMNVIAHPXMXSS7UGS
 
 ---
 
-## Quick start
-
-Prerequisites: Node.js 22.13+, Docker (for the sandbox), a Gemini API key.
-
-```bash
-npm install
-npm run setup          # creates a testnet account, funds it via friendbot, opens the USDC trustline
-                       # writes .env.local (git-ignored)
-# add GEMINI_API_KEY to .env.local
-npm run dev            # http://localhost:3100
-```
-
-Then: sign in with a passkey → `/scan/new` → start a scan. The agent generates a Rust test,
-the sandbox runs it in a container, and the terminal shows the real `cargo test` output.
-
-Without Docker the app still authenticates, still calls the model and still returns the
-generated test — it reports that the test was not executed rather than pretending it ran.
-
-Checks:
-
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
-
-Contract tests (see [Technical challenges](#technical-challenges) for why these run in Docker):
-
-```bash
-docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \
-  sh -c "rustup target add wasm32v1-none && cargo test"
-```
-
----
-
 ## How the hackathon requirements are met
 
 | Requirement | How Z-FUZZ meets it |
@@ -308,6 +273,63 @@ from the actual run.
 
 ---
 
+## Evaluating this submission
+
+Five minutes, no setup:
+
+1. **Open the live app** — [https://zero-fuzz-risein1.vercel.app](https://zero-fuzz-risein1.vercel.app) — and walk `/` → `/deposit` → `/scan/new`.
+2. **Run a scan.** `/scan/new` → start. The agent really calls the model and returns a real
+   Rust test. The hosted build cannot execute it (serverless has no container runtime) and
+   says so instead of faking a pass.
+3. **Cash out through the anchor.** `/deposit` → **Cash out** → 1 USDC. This settles for
+   real: USDC leaves the account on chain, the anchor pays TRY, and the result panel links
+   the Stellar transaction.
+4. **Check the chain.** Every hash in [Deployed artifacts](#deployed-artifacts) resolves on
+   stellar.expert, and the [verify commands](#verify-it-yourself) reproduce the numbers.
+5. **Watch a contract actually fail** — [the demo video](docs/demo/zero-fuzz-demo.mp4), or
+   run it locally with Docker via [Quick start](#quick-start).
+
+Deposits are currently stalled on the shared anchor's side, not ours — see the
+[upstream status note](#anchor-settlements-real-testnet-transactions). Use **Cash out** to
+see the fiat rail work.
+
+---
+
+## Quick start
+
+Prerequisites: Node.js 22.13+, Docker (for the sandbox), a Gemini API key.
+
+```bash
+npm install
+npm run setup          # creates a testnet account, funds it via friendbot, opens the USDC trustline
+                       # writes .env.local (git-ignored)
+# add GEMINI_API_KEY to .env.local
+npm run dev            # http://localhost:3100
+```
+
+Then: sign in with a passkey → `/scan/new` → start a scan. The agent generates a Rust test,
+the sandbox runs it in a container, and the terminal shows the real `cargo test` output.
+
+Without Docker the app still authenticates, still calls the model and still returns the
+generated test — it reports that the test was not executed rather than pretending it ran.
+
+Checks:
+
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
+
+Contract tests (see [Technical challenges](#technical-challenges) for why these run in Docker):
+
+```bash
+docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \
+  sh -c "rustup target add wasm32v1-none && cargo test"
+```
+
+---
+
 ## Technical reference
 
 ### Components and responsibilities
@@ -335,6 +357,8 @@ from the actual run.
 | `@stellar/stellar-sdk` | transaction building, submission, contract invocation |
 
 Skill files cited by path: [`docs/SKILLS_USED.md`](docs/SKILLS_USED.md).
+Deeper notes on the agent's prompt discipline and the sandbox threat model:
+[`docs/technical.md`](docs/technical.md).
 
 ---
 
@@ -427,24 +451,14 @@ zero-fuzz/
 │       └── wallet.ts        # Stellar Wallets Kit
 └── docs/
     ├── SKILLS_USED.md       # skill files cited by path (handbook requirement)
-    ├── technical.md         # longer-form notes; the README is the primary technical doc
+    ├── technical.md         # agent prompt discipline + sandbox threat model
     ├── demo/                # narrated demo video + subtitles
     └── screens/             # screenshots used above
 ```
 
 ---
 
-## Screens and API
-
-| Route | Screen |
-|---|---|
-| `/` | Landing |
-| `/dashboard` | Dashboard, passkey-gated |
-| `/deposit` | Add scan credit, or cash out back to a bank account |
-| `/scan/new` | Upload contract, select lanes |
-| `/scan/[id]` | Live agent terminal, then the result |
-| `/scan/[id]/patch` | Proposed patch, diff view |
-| `/scan/[id]/certificate` | Audit certificate |
+## API reference
 
 | Method | Route | Purpose |
 |---|---|---|
@@ -490,6 +504,23 @@ the public-good component.
 Typography note: monospace is reserved for machine output — terminal lines, test names,
 transaction hashes and contract addresses. Everything a human wrote is set in the interface
 typeface.
+
+---
+
+## Team
+
+Two people, Genesis track.
+
+| | |
+|---|---|
+| **Lütfi İlker Kazak** | Engineering — Soroban registry contract, anchor integration in both directions, agent and sandbox, frontend |
+| **Melisa Kumral** | Product direction and coordination — scope, priorities, and the demo narrative |
+
+---
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
 
 ---
 

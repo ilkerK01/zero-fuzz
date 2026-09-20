@@ -70,10 +70,9 @@ is constrained to a `#[test]` block, that test is compiled and executed against 
 contract, and a finding exists only if `cargo test` went red. No confidence score, no
 severity guess, nothing for a human to triage. The artifact *is* the proof.
 
-**An audit should cost lira, not an invoice.** Free Soroban-aware tools run first and narrow
-the search space, then the metered agent works only where something is already suspicious.
-The scan is paid for from an anchor balance, per cycle, so the price scales with the work
-rather than with a consultant's calendar.
+**An audit should cost lira, not an invoice.** A scan is metered — one model call, one
+sandbox run — and paid for from an anchor balance, so the price scales with the work rather
+than with a consultant's calendar.
 
 **The answer ships with the fix.** Every finding carries a proposed patch, and a contract
 that comes back clean gets an audit record on chain that anyone can verify independently.
@@ -92,11 +91,10 @@ compute in the next steps.
 
 ![Add scan credit](docs/screens/05-deposit.png)
 
-### 2 · Triage, then hunt
+### 2 · Hunt
 
-`scout-soroban`, `cargo-audit` and `clippy` run for free and mark the suspicious surface.
-Only then does the metered agent start, mapping storage classes and `require_auth` paths and
-writing a test aimed at one invariant.
+The agent is given the contract's interface and one invariant, and writes a single Rust test
+aimed at breaking it. Its output is constrained to a test block; prose is rejected.
 
 ### 3 · Run it where it cannot do harm
 
@@ -286,11 +284,9 @@ This table is the reference for every other claim in this repository.
 | Sandbox runs `cargo test` | Working — local Docker (`network=none`) or the hosted sandbox service |
 | Agent → sandbox → registry, real PASS/FAIL | Working end to end on the live app, about 25s per scan |
 | Connected wallet balance | Working — the credit screen shows the connected wallet's own USDC |
-| x402 metering, cycles and cost | Computed from the real run |
+| x402 metering, cycles and cost | One model call and one sandbox run, billed only when they actually happen |
 | x402 **deduction** from the on-chain balance | Not wired — balance is real, debit is not submitted |
 | Soroban audit registry on testnet | Deployed, 4 unit tests; a scan with a verdict writes its result on chain |
-| Deposit and cash-out from the connected wallet | Not yet — both move the shared demo account |
-| Scanning an uploaded contract | The sandbox service compiles uploaded source; the app does not send it yet |
 | Composability lane against Blend v2 / Soroswap | Not implemented — the lane runs against a local pool harness |
 
 The vulnerability description text on the result panel is still a fixed string; the test
@@ -362,7 +358,7 @@ docker run --rm -v "$PWD/contracts/registry:/w" -w /w rust:1-slim \
 | `src/lib/server/passkeys.ts` | WebAuthn ceremony and session state |
 | `src/lib/server/gemini.ts` | Constrained test generation — output is a `#[test]` block or nothing |
 | `src/lib/server/sandbox.ts` | Container lifecycle, mount, `cargo test`, output capture, teardown |
-| `src/lib/server/scan.ts` | Orchestration: static triage → agent → sandbox → verdict → billing |
+| `src/lib/server/scan.ts` | Orchestration: agent → sandbox → verdict → registry → billing |
 | `src/lib/wallet.ts` | Stellar Wallets Kit setup and client-side signing |
 | `contracts/registry` | Soroban audit registry, `soroban-sdk 28`, 4 unit tests |
 | `src/lib/server/registry.ts` | Writes each verdict to the audit registry over Soroban RPC |
@@ -390,7 +386,7 @@ Deeper notes on the agent's prompt discipline and the sandbox threat model:
 ## Design decisions and trade-offs
 
 <details>
-<summary>Seven decisions and what each one cost</summary>
+<summary>Six decisions and what each one cost</summary>
 
 **SEP-6 rather than SEP-24.** SEP-24 needs an interactive popup, which breaks a flow whose
 whole point is that the scan runs unattended. SEP-6 is programmatic. *Trade-off:* SEP-6
@@ -401,9 +397,6 @@ that does.
 server, not the user. Signing client-side through Stellar Wallets Kit means the SEP-10 token
 belongs to the person whose contract is being audited. *Trade-off:* one more user
 interaction, and the flow depends on a wallet extension being installed.
-
-**Static triage before the paid agent.** *Trade-off:* three extra toolchain dependencies,
-in exchange for a cost per scan we can defend.
 
 **A hosted model, not a local one.** No GPU, no model download, no VRAM budget, better code
 generation, and the largest setup risk removed. *Trade-off:* contract source leaves the
@@ -531,16 +524,18 @@ Ordered by what a paying user would notice first.
    the real USDC balance, and halt the job at `Budget Exceeded`. The metering already
    computes the amounts.
 2. **Money on the connected wallet.** Route deposits to the visitor's own account and have
-   their wallet sign the cash-out, instead of the shared demo account.
-3. **Scan the uploaded contract.** The sandbox service already compiles uploaded source;
-   the agent needs to read it and derive the invariants itself.
-4. **Real Blend v2 composability.** Pin a Blend v2 testnet pool state into the sandbox image
+   their wallet sign the cash-out.
+3. **Scan any uploaded contract.** The sandbox service already compiles uploaded source;
+   next the agent reads it and derives the invariants itself.
+4. **Static triage before the agent.** Run `scout-soroban`, `cargo-audit` and `clippy` first
+   so the metered agent only works where something is already suspicious.
+5. **Real Blend v2 composability.** Pin a Blend v2 testnet pool state into the sandbox image
    so the lane composes against the real protocol without giving the container network.
-5. **Network-isolated hosted sandbox.** Move the service to a host that allows dropping the
+6. **Network-isolated hosted sandbox.** Move the service to a host that allows dropping the
    network namespace, matching the local container.
-6. **Feed the result panel from the report.** The remaining fixed strings go.
-7. **Persist passkeys and scans.** Both are in memory today.
-8. **CI action.** `z-fuzz scan` as one step in a pull request, which is where this tool
+7. **Feed the result panel from the report.** The remaining fixed strings go.
+8. **Persist passkeys and scans.** Both are in memory today.
+9. **CI action.** `z-fuzz scan` as one step in a pull request, which is where this tool
    actually belongs.
 
 **Next step after the hackathon:** SCF Build Award application, with the audit registry as

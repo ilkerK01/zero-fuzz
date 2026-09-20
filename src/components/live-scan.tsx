@@ -25,9 +25,8 @@ const toneClass: Record<ScanStep["tone"], string> = {
 };
 
 const PRE: ScanStep[] = [
-  { agent: "static", tone: "muted", text: "scout-soroban + cargo-audit: narrowing search space" },
-  { agent: "agent-1", tone: "agent", text: "mapping storage entries and auth paths" },
-  { agent: "agent-2", tone: "agent", text: "asking the model for a #[test] on this invariant" },
+  { agent: "target", tone: "muted", text: "target: bundled example contract zf_harness" },
+  { agent: "agent", tone: "agent", text: "asking the model for a #[test] on the invariant" },
 ];
 
 export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
@@ -56,14 +55,10 @@ export function LiveScan({ onDone }: { onDone?: (r: ScanReport) => void }) {
 
     (async () => {
       try {
-        let scenario: string | undefined;
-        try {
-          scenario = sessionStorage.getItem("zf-scenario") ?? undefined;
-        } catch {}
         const res = await fetch("/api/scan", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(scenario ? { scenario } : {}),
+          body: JSON.stringify({}),
         });
         const data = (await res.json()) as ScanReport & { error?: string };
         if (!res.ok) throw new Error(data.error ?? "scan failed");

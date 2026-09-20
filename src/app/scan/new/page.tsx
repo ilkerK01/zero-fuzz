@@ -10,8 +10,7 @@ type LaneKey = "state" | "auth" | "comp";
 const ACCEPT = [".rs", ".wasm", ".toml", ".txt"];
 const MAX_BYTES = 256 * 1024;
 
-const DEFAULT_INVARIANT =
-  "after set_amount stores a value in temporary storage and the ledger advances far past its TTL, read_amount must return 0 rather than a stale value";
+const SCAN_PRICE = 1.4;
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -21,22 +20,15 @@ function formatSize(bytes: number) {
 export default function NewScanPage() {
   const { t } = useLang();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [lanes, setLanes] = useState<Record<LaneKey, boolean>>({
-    state: true,
-    auth: false,
-    comp: true,
-  });
   const [file, setFile] = useState<{ name: string; size: number } | null>(null);
-  const [invariant, setInvariant] = useState(DEFAULT_INVARIANT);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  const laneDefs: { key: LaneKey; title: string; desc: string }[] = [
-    { key: "state", title: t("up.lane.state"), desc: t("up.lane.state.d") },
-    { key: "auth", title: t("up.lane.auth"), desc: t("up.lane.auth.d") },
-    { key: "comp", title: t("up.lane.comp"), desc: t("up.lane.comp.d") },
+  const laneDefs: { key: LaneKey; title: string; desc: string; live: boolean }[] = [
+    { key: "state", title: t("up.lane.state"), desc: t("up.lane.state.d"), live: true },
+    { key: "auth", title: t("up.lane.auth"), desc: t("up.lane.auth.d"), live: false },
+    { key: "comp", title: t("up.lane.comp"), desc: t("up.lane.comp.d"), live: false },
   ];
-  const selected = Object.values(lanes).filter(Boolean).length;
 
   const accept = (picked: File | undefined) => {
     setError(null);
@@ -51,14 +43,6 @@ export default function NewScanPage() {
       return;
     }
     setFile({ name: picked.name, size: picked.size });
-  };
-
-  const start = () => {
-    const chosen = invariant.trim() || DEFAULT_INVARIANT;
-    try {
-      sessionStorage.setItem("zf-scenario", chosen);
-      sessionStorage.setItem("zf-target", file?.name ?? "zf_harness/src/lib.rs");
-    } catch {}
   };
 
   return (
@@ -120,27 +104,12 @@ export default function NewScanPage() {
         ) : null}
 
         <div className="mt-8">
-          <span className="text-[11px] text-fg-2">{t("up.inv")}</span>
-          <textarea
-            value={invariant}
-            onChange={(e) => setInvariant(e.target.value)}
-            rows={3}
-            className="mono mt-3 w-full resize-y border border-line-strong bg-inset px-4 py-3 text-[12px] leading-relaxed text-fg outline-none focus:border-agent"
-          />
-          <p className="mt-2 text-[11px] text-fg-3">{t("up.inv.h")}</p>
-        </div>
-
-        <div className="mt-8">
           <span className="text-[11px] text-fg-2">{t("up.lanes")}</span>
           <div className="mt-3 space-y-px bg-line">
             {laneDefs.map((lane) => {
-              const on = lanes[lane.key];
+              const on = lane.live;
               return (
-                <button
-                  key={lane.key}
-                  onClick={() => setLanes((p) => ({ ...p, [lane.key]: !p[lane.key] }))}
-                  className="flex w-full items-start gap-4 bg-surface p-4 text-left"
-                >
+                <div key={lane.key} className="flex w-full items-start gap-4 bg-surface p-4 text-left">
                   <span
                     className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center border ${
                       on ? "border-agent bg-agent" : "border-line-strong"
@@ -152,11 +121,12 @@ export default function NewScanPage() {
                       </svg>
                     ) : null}
                   </span>
-                  <span>
+                  <span className="flex-1">
                     <span className={`block text-sm ${on ? "text-fg" : "text-fg-2"}`}>{lane.title}</span>
                     <span className="mt-0.5 block text-xs text-fg-3">{lane.desc}</span>
                   </span>
-                </button>
+                  {on ? null : <span className="mono text-[10px] text-fg-3">{t("up.soon")}</span>}
+                </div>
               );
             })}
           </div>
@@ -169,9 +139,9 @@ export default function NewScanPage() {
         <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
           <div>
             <span className="block text-[11px] text-fg-3">{t("up.est")}</span>
-            <AmountDisplay value={`~${(selected * 6.5).toFixed(1)}`} unit="TRYC" tone="agent" size="lg" />
+            <AmountDisplay value={`~${SCAN_PRICE.toFixed(1)}`} unit="TRYC" tone="agent" size="lg" />
           </div>
-          <Button href="/scan/demo" onClick={start} variant="primary">{t("up.start")}</Button>
+          <Button href="/scan/demo" variant="primary">{t("up.start")}</Button>
         </div>
       </main>
       <SiteFooter />

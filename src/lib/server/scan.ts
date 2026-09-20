@@ -17,12 +17,8 @@ export type Billing = {
   durationMs: number;
 };
 
-const UNIT_PRICE: Record<string, number> = {
-  static: 0,
-  "agent-1": 0.4,
-  "agent-2": 1.1,
-  sandbox: 0.3,
-};
+const MODEL_CALL_PRICE = 1.1;
+const SANDBOX_RUN_PRICE = 0.3;
 
 const BUDGET = 20;
 
@@ -32,10 +28,8 @@ function bill(steps: ScanStep[], durationMs: number): Billing {
   let spent = 0;
   let cycles = 0;
   for (const step of steps) {
-    const price = UNIT_PRICE[step.agent] ?? 0;
-    if (price === 0) continue;
-    step.cost = price;
-    spent += price;
+    if (!step.cost) continue;
+    spent += step.cost;
     cycles += 1;
   }
   return { cycles, spent: Math.round(spent * 100) / 100, budget: BUDGET, durationMs };
@@ -60,16 +54,20 @@ const DEFAULT_SCENARIO =
 export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> {
   const startedAt = Date.now();
   const steps: ScanStep[] = [];
-  steps.push({ agent: "static", tone: "muted", text: "scout-soroban + cargo-audit: narrowing search space" });
-  steps.push({ agent: "agent-1", tone: "agent", text: "mapping storage entries and auth paths" });
-  steps.push({ agent: "agent-2", tone: "agent", text: "generating #[test] for the target invariant" });
+  steps.push({ agent: "target", tone: "muted", text: "target: bundled example contract zf_harness" });
+  const modelStep: ScanStep = {
+    agent: "agent",
+    tone: "agent",
+    text: "asking the model for a #[test] on the invariant",
+  };
+  steps.push(modelStep);
 
   let testSource: string;
   try {
     testSource = await generateTest(scenario);
   } catch (error) {
     const reason = error instanceof GeminiError ? error.message : "model could not be reached, no test generated";
-    steps.push({ agent: "agent-2", tone: "danger", text: reason });
+    steps.push({ agent: "agent", tone: "danger", text: reason });
     return {
       steps,
       testSource: "",
@@ -89,7 +87,8 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
       modelError: reason,
     };
   }
-  steps.push({ agent: "agent-2", tone: "agent", text: "test generated, handing off to sandbox" });
+  modelStep.cost = MODEL_CALL_PRICE;
+  steps.push({ agent: "agent", tone: "agent", text: "test generated, handing off to sandbox" });
 
   const mode = await sandboxMode();
   if (mode === "remote") {
@@ -123,22 +122,24 @@ export async function runScan(scenario = DEFAULT_SCENARIO): Promise<ScanReport> 
     };
   }
 
-  steps.push({
+  const runStep: ScanStep = {
     agent: "sandbox",
     tone: "muted",
     text: mode === "remote" ? "running the test in the sandbox service" : "spawning air-gapped container (network=none)",
-  });
+  };
+  steps.push(runStep);
 
   const sandbox = await runTest(testSource);
+  runStep.cost = SANDBOX_RUN_PRICE;
 
   if (!sandbox.compiled) {
     steps.push({ agent: "sandbox", tone: "danger", text: "generated test failed to compile" });
   } else if (sandbox.failed > 0) {
     steps.push({ agent: "sandbox", tone: "danger", text: `test result: FAILED (${sandbox.failed})` });
-    steps.push({ agent: "agent-2", tone: "danger", text: "vulnerability confirmed in sandbox" });
+    steps.push({ agent: "agent", tone: "danger", text: "vulnerability confirmed in sandbox" });
   } else {
     steps.push({ agent: "sandbox", tone: "ok", text: sandbox.summary });
-    steps.push({ agent: "agent-2", tone: "ok", text: "no violation on this lane" });
+    steps.push({ agent: "agent", tone: "ok", text: "no violation on this lane" });
   }
 
   const vulnerable = sandbox.compiled && sandbox.failed > 0;

@@ -108,9 +108,8 @@ const en = {
   "up.clear": "Remove",
   "up.toobig": "That file is larger than 256 KB.",
   "up.badtype": "Only .rs, .wasm, .toml and .txt are accepted.",
-  "up.inv": "Invariant to test",
-  "up.inv.h": "The agent writes one Rust test that fails if this does not hold.",
-  "up.note": "In this build the generated test compiles against the bundled harness crate, so an uploaded contract sets the invariant rather than being compiled in place.",
+  "up.soon": "Next",
+  "up.note": "In this build the scan runs against the bundled example contract. Scanning your uploaded source is the next step on the roadmap.",
 
   "term.title": "Live agent terminal",
   "term.status.fuzzing": "FUZZING",
@@ -298,9 +297,8 @@ const tr: typeof en = {
   "up.clear": "Kaldır",
   "up.toobig": "Bu dosya 256 KB'den büyük.",
   "up.badtype": "Yalnızca .rs, .wasm, .toml ve .txt kabul ediliyor.",
-  "up.inv": "Test edilecek değişmez",
-  "up.inv.h": "Ajan, bu koşul sağlanmazsa başarısız olan tek bir Rust testi yazar.",
-  "up.note": "Bu sürümde üretilen test, pakete gömülü harness crate'ine karşı derleniyor; yüklenen kontrat testi yerinde derlemek yerine değişmezi belirliyor.",
+  "up.soon": "Sırada",
+  "up.note": "Bu sürümde tarama, pakete gömülü örnek kontrata karşı koşuyor. Yüklediğin kaynağın taranması yol haritasındaki bir sonraki adım.",
 
   "term.title": "Canlı ajan terminali",
   "term.status.fuzzing": "FUZZING",

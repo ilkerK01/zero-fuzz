@@ -1,8 +1,11 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { Networks, StrKey } from "@stellar/stellar-sdk";
 import {
   AnchorError,
   balance,
+  balanceOf,
+  buildWithdrawPaymentXdr,
   payAnchor,
   sep10Token,
   settle,
@@ -17,10 +20,45 @@ const MIN_USDC = 0.1;
 export async function POST(req: NextRequest) {
   let stellarTxId: string | null = null;
   try {
-    const body = (await req.json().catch(() => ({}))) as { amount?: unknown };
+    const body = (await req.json().catch(() => ({}))) as {
+      amount?: unknown;
+      address?: unknown;
+      token?: unknown;
+    };
     const requested = Number(body.amount);
     if (!Number.isFinite(requested) || requested < MIN_USDC) {
       throw new AnchorError(`Amount must be at least ${MIN_USDC} USDC`, 400);
+    }
+
+    const walletAddress = typeof body.address === "string" && StrKey.isValidEd25519PublicKey(body.address)
+      ? body.address
+      : null;
+    const walletToken = typeof body.token === "string" && body.token.length > 0 ? body.token : null;
+
+    if (walletAddress && walletToken) {
+      const available = Number((await balanceOf(walletAddress)).balance);
+      if (requested > available) {
+        throw new AnchorError(
+          `Not enough credit: ${available.toFixed(7)} USDC available`,
+          400,
+        );
+      }
+      const amount = requested.toFixed(7);
+      const quote = await startWithdraw(amount, walletToken, walletAddress);
+      const xdr = await buildWithdrawPaymentXdr(walletAddress, quote, amount);
+      return NextResponse.json({
+        mode: "wallet",
+        xdr,
+        networkPassphrase: Networks.TESTNET,
+        amountIn: amount,
+        withdraw: {
+          id: quote.id,
+          iban: quote.iban,
+          rate: quote.rate,
+          feePercent: quote.feePercent,
+          memo: quote.memo,
+        },
+      });
     }
 
     const available = Number(await balance());
@@ -40,6 +78,7 @@ export async function POST(req: NextRequest) {
     const tx = await settle(quote.id, token, 20);
 
     return NextResponse.json({
+      mode: "demo",
       withdraw: {
         id: quote.id,
         iban: quote.iban,

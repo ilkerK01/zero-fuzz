@@ -115,14 +115,17 @@ export type DepositStarted = {
   feePercent: number;
 };
 
-export async function startDeposit(amount: string, token: string): Promise<DepositStarted> {
-  const { anchor, address, code } = config();
+export async function startDeposit(amount: string, token: string, account?: string): Promise<DepositStarted> {
+  const { anchor, address: defaultAddress, code } = config();
   const url = new URL(`${anchor}/sep6/deposit`);
   url.searchParams.set("asset_code", code);
-  url.searchParams.set("account", address);
+  url.searchParams.set("account", account ?? defaultAddress);
   url.searchParams.set("type", "bank_account");
   url.searchParams.set("amount", amount);
   const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  if (res.status === 401 || res.status === 403) {
+    throw new AnchorError("Your anchor session expired. Verify the wallet again.", 401);
+  }
   if (!res.ok) throw new AnchorError(`SEP-6 deposit failed (${res.status})`);
   const data = (await res.json()) as {
     id: string;
@@ -145,6 +148,9 @@ export async function simulateTransfer(id: string, amount: string, token: string
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
     body: JSON.stringify({ amount }),
   });
+  if (res.status === 401 || res.status === 403) {
+    throw new AnchorError("Your anchor session expired. Verify the wallet again.", 401);
+  }
   if (!res.ok) throw new AnchorError(`Bank transfer simulation failed (${res.status})`);
 }
 
@@ -159,6 +165,9 @@ export async function transaction(id: string, token: string): Promise<AnchorTx> 
   const res = await fetch(`${anchor}/sep6/transaction?id=${id}`, {
     headers: { authorization: `Bearer ${token}` },
   });
+  if (res.status === 401 || res.status === 403) {
+    throw new AnchorError("Your anchor session expired. Verify the wallet again.", 401);
+  }
   if (!res.ok) throw new AnchorError(`SEP-6 transaction lookup failed (${res.status})`);
   const data = (await res.json()) as {
     transaction?: Record<string, unknown>;
@@ -194,14 +203,17 @@ export type WithdrawQuote = {
   feePercent: number;
 };
 
-export async function startWithdraw(amount: string, token: string): Promise<WithdrawQuote> {
-  const { anchor, address, code } = config();
+export async function startWithdraw(amount: string, token: string, account?: string): Promise<WithdrawQuote> {
+  const { anchor, address: defaultAddress, code } = config();
   const url = new URL(`${anchor}/sep6/withdraw`);
   url.searchParams.set("asset_code", code);
-  url.searchParams.set("account", address);
+  url.searchParams.set("account", account ?? defaultAddress);
   url.searchParams.set("type", "bank_account");
   url.searchParams.set("amount", amount);
   const res = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  if (res.status === 401 || res.status === 403) {
+    throw new AnchorError("Your anchor session expired. Verify the wallet again.", 401);
+  }
   const text = await res.text();
   if (!res.ok) throw new AnchorError(`SEP-6 withdraw failed (${res.status}): ${text.slice(0, 160)}`);
   const data = JSON.parse(text) as {
@@ -229,14 +241,14 @@ export async function startWithdraw(amount: string, token: string): Promise<With
   };
 }
 
-function memoFor(quote: WithdrawQuote): Memo {
+export function memoFor(quote: WithdrawQuote): Memo {
   if (quote.memoType === "id") return Memo.id(String(quote.memo));
   if (quote.memoType === "text") return Memo.text(String(quote.memo));
   if (quote.memoType === "hash") return Memo.hash(Buffer.from(quote.memo, "base64"));
   throw new AnchorError(`Anchor asked for an unsupported memo type: ${quote.memoType}`);
 }
 
-function submitError(error: unknown): AnchorError {
+export function submitError(error: unknown): AnchorError {
   const extras = (error as { response?: { data?: { extras?: Record<string, unknown> } } })?.response?.data?.extras;
   const codes = extras?.result_codes as { transaction?: string; operations?: string[] } | undefined;
   if (codes) {
@@ -265,6 +277,47 @@ export async function payAnchor(quote: WithdrawQuote, amount: string): Promise<s
     .setTimeout(90)
     .build();
   tx.sign(keypair);
+  try {
+    const sent = await horizon.submitTransaction(tx);
+    return sent.hash;
+  } catch (error) {
+    throw submitError(error);
+  }
+}
+
+export async function buildTrustlineXdr(address: string): Promise<string> {
+  const { code, issuer } = config();
+  const account = await horizon.loadAccount(address);
+  const tx = new TransactionBuilder(account, { fee: "10000", networkPassphrase: Networks.TESTNET })
+    .addOperation(Operation.changeTrust({ asset: new Asset(code, issuer) }))
+    .setTimeout(300)
+    .build();
+  return tx.toXDR();
+}
+
+export async function buildWithdrawPaymentXdr(
+  address: string,
+  quote: WithdrawQuote,
+  amount: string,
+): Promise<string> {
+  const { code, issuer } = config();
+  const account = await horizon.loadAccount(address);
+  const tx = new TransactionBuilder(account, { fee: "10000", networkPassphrase: Networks.TESTNET })
+    .addOperation(
+      Operation.payment({
+        destination: quote.destination,
+        asset: new Asset(code, issuer),
+        amount,
+      }),
+    )
+    .addMemo(memoFor(quote))
+    .setTimeout(180)
+    .build();
+  return tx.toXDR();
+}
+
+export async function submitSigned(xdr: string): Promise<string> {
+  const tx = TransactionBuilder.fromXDR(xdr, Networks.TESTNET);
   try {
     const sent = await horizon.submitTransaction(tx);
     return sent.hash;

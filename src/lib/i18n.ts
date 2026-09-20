@@ -194,6 +194,13 @@ const en = {
   "bal.unfunded": "This account does not exist on testnet yet. Fund it with friendbot.",
   "bal.notrust": "No USDC trustline on this account yet.",
   "bal.hint": "Connect a wallet on the dashboard to see your own balance.",
+  "wallet.verify.hint": "Verify with the anchor before you can move money from this wallet.",
+  "prep.needed": "This wallet needs to be prepared before it can hold USDC.",
+  "prep.button": "Prepare my account",
+  "stage.anchor": "Talking to the anchor ...",
+  "stage.sign": "Waiting for your wallet signature ...",
+  "stage.submit": "Submitting to the network ...",
+  "wallet.sign.cancelled": "The transaction was not signed, nothing was sent.",
 };
 
 const tr: typeof en = {
@@ -390,6 +397,13 @@ const tr: typeof en = {
   "bal.unfunded": "Bu hesap testnet'te henüz yok. Friendbot ile fonla.",
   "bal.notrust": "Bu hesapta henüz USDC trustline yok.",
   "bal.hint": "Kendi bakiyeni görmek için panelden cüzdanını bağla.",
+  "wallet.verify.hint": "Bu cüzdandan para taşımadan önce anchor ile doğrulanman gerekiyor.",
+  "prep.needed": "Bu cüzdanın USDC tutabilmesi için önce hazırlanması gerekiyor.",
+  "prep.button": "Hesabımı hazırla",
+  "stage.anchor": "Anchor ile konuşuluyor ...",
+  "stage.sign": "Cüzdan imzan bekleniyor ...",
+  "stage.submit": "Zincire gönderiliyor ...",
+  "wallet.sign.cancelled": "İşlem imzalanmadı, hiçbir şey gönderilmedi.",
 };
 
 export const dict: Record<Lang, typeof en> = { en, tr };

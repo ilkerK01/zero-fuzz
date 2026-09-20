@@ -37,11 +37,22 @@ export async function connectWallet(): Promise<string> {
   });
 }
 
-export async function signChallenge(xdr: string, address: string, networkPassphrase: string) {
+export async function signXdr(xdr: string, address: string, networkPassphrase: string) {
   const k = getKit();
   const { signedTxXdr } = await k.signTransaction(xdr, {
     address,
     networkPassphrase,
   });
   return signedTxXdr;
+}
+
+export const signChallenge = signXdr;
+
+export async function ensureWallet(): Promise<string> {
+  const k = getKit();
+  try {
+    const { address } = await k.getAddress();
+    if (address) return address;
+  } catch {}
+  return connectWallet();
 }

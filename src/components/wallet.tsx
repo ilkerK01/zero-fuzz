@@ -2,18 +2,19 @@
 
 import { createContext, useCallback, useContext, useSyncExternalStore } from "react";
 
-type Connection = { address: string | null; verified: boolean };
+type Connection = { address: string | null; verified: boolean; token: string | null };
 
 type WalletContextValue = Connection & {
   connect: (address: string) => void;
-  markVerified: () => void;
+  markVerified: (token: string) => void;
   disconnect: () => void;
+  expire: () => void;
 };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 const listeners = new Set<() => void>();
-const EMPTY: Connection = { address: null, verified: false };
+const EMPTY: Connection = { address: null, verified: false, token: null };
 let cache: Connection = EMPTY;
 let cacheRaw: string | null = null;
 
@@ -48,15 +49,22 @@ function write(next: Connection) {
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const state = useSyncExternalStore(subscribe, read, () => EMPTY);
 
-  const connect = useCallback((address: string) => write({ address, verified: false }), []);
-  const markVerified = useCallback(() => {
+  const connect = useCallback(
+    (address: string) => write({ address, verified: false, token: null }),
+    [],
+  );
+  const markVerified = useCallback((token: string) => {
     const current = read();
-    if (current.address) write({ address: current.address, verified: true });
+    if (current.address) write({ address: current.address, verified: true, token });
   }, []);
   const disconnect = useCallback(() => write(EMPTY), []);
+  const expire = useCallback(() => {
+    const current = read();
+    if (current.address) write({ address: current.address, verified: false, token: null });
+  }, []);
 
   return (
-    <WalletContext.Provider value={{ ...state, connect, markVerified, disconnect }}>
+    <WalletContext.Provider value={{ ...state, connect, markVerified, disconnect, expire }}>
       {children}
     </WalletContext.Provider>
   );

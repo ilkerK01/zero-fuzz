@@ -5,6 +5,8 @@ import { FloatingNav, SiteFooter } from "@/components/home/nav";
 import { AmountDisplay, Kicker, StatusPill, TxLink } from "@/components/ui";
 import { useLang } from "@/components/lang";
 import { useWallet } from "@/components/wallet";
+import { WalletConnect } from "@/components/wallet-connect";
+import { ensureWallet, signXdr } from "@/lib/wallet";
 
 const amounts = [500, 1000, 2000, 3000];
 const usdcAmounts = [1, 5, 10];
@@ -17,14 +19,26 @@ type Result = {
   balance: string;
 };
 
+type WithdrawInfo = { id: string; iban: string; rate: string | null; feePercent: number; memo: string };
+
 type WithdrawResult = {
-  withdraw: { id: string; iban: string; rate: string | null; feePercent: number; memo: string };
+  withdraw: WithdrawInfo;
   amountIn: string;
   status: string;
   amountOut: string | null;
   stellarTxId: string | null;
   balance: string;
 };
+
+type WalletWithdrawInit = {
+  xdr?: string;
+  networkPassphrase?: string;
+  amountIn?: string;
+  withdraw?: WithdrawInfo;
+  error?: string;
+};
+
+type Stage = "" | "anchor" | "sign" | "submit";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -35,19 +49,56 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+async function signWithFallback(xdr: string, address: string, networkPassphrase: string) {
+  try {
+    return await signXdr(xdr, address, networkPassphrase);
+  } catch {
+    await ensureWallet();
+    return await signXdr(xdr, address, networkPassphrase);
+  }
+}
+
 export default function DepositPage() {
   const { t, lang } = useLang();
-  const { address: wallet } = useWallet();
+  const { address: wallet, verified, token, expire } = useWallet();
   const tr = lang === "tr";
   const [tab, setTab] = useState<"in" | "out">("in");
   const [amount, setAmount] = useState(1000);
   const [usdc, setUsdc] = useState(1);
   const [balance, setBalance] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<Stage>("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [withdrawn, setWithdrawn] = useState<WithdrawResult | null>(null);
   const [source, setSource] = useState<{ connected: boolean; funded: boolean; trustline: boolean } | null>(null);
+  const [prepBusy, setPrepBusy] = useState(false);
+  const [prepStage, setPrepStage] = useState<Stage>("");
+  const [prepError, setPrepError] = useState<string | null>(null);
+
+  const mode: "demo" | "unverified" | "wallet" = !wallet ? "demo" : !verified ? "unverified" : "wallet";
+  const needsPrepare = mode === "wallet" && source !== null && (!source.funded || !source.trustline);
+
+  const loadBalance = async () => {
+    try {
+      const url = wallet ? `/api/anchor?address=${wallet}` : "/api/anchor";
+      const res = await fetch(url);
+      const data = (await res.json()) as {
+        balance?: string;
+        connected?: boolean;
+        funded?: boolean;
+        trustline?: boolean;
+      };
+      if (res.ok) {
+        setBalance(data.balance ?? "0");
+        setSource({
+          connected: Boolean(data.connected),
+          funded: data.funded !== false,
+          trustline: data.trustline !== false,
+        });
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -76,47 +127,163 @@ export default function DepositPage() {
     };
   }, [wallet]);
 
-  const refreshBalance = async () => {
-    try {
-      const res = await fetch("/api/anchor");
-      const data = (await res.json()) as { balance?: string };
-      if (res.ok) setBalance(data.balance ?? "0");
-    } catch {}
-  };
-
   const switchTab = (next: "in" | "out") => {
     setTab(next);
     setError(null);
     setResult(null);
     setWithdrawn(null);
+    setPrepError(null);
+  };
+
+  const prepareAccount = async () => {
+    if (!wallet) return;
+    setPrepBusy(true);
+    setPrepError(null);
+    setPrepStage("anchor");
+    try {
+      const res = await fetch("/api/wallet/prepare", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address: wallet }),
+      });
+      const data = (await res.json()) as {
+        ready?: boolean;
+        funded?: boolean;
+        xdr?: string;
+        networkPassphrase?: string;
+        error?: string;
+      };
+      if (res.status === 401) {
+        expire();
+        setPrepError(data.error ?? (tr ? "Oturum süresi doldu" : "Session expired"));
+        return;
+      }
+      if (!res.ok) throw new Error(data.error ?? (tr ? "Hazırlık başarısız" : "Prepare failed"));
+      if (data.xdr && data.networkPassphrase) {
+        setPrepStage("sign");
+        let signed: string;
+        try {
+          signed = await signWithFallback(data.xdr, wallet, data.networkPassphrase);
+        } catch {
+          setPrepError(t("wallet.sign.cancelled"));
+          return;
+        }
+        setPrepStage("submit");
+        const subRes = await fetch("/api/wallet/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ xdr: signed }),
+        });
+        const subData = (await subRes.json()) as { hash?: string; error?: string };
+        if (subRes.status === 401) {
+          expire();
+          setPrepError(subData.error ?? (tr ? "Oturum süresi doldu" : "Session expired"));
+          return;
+        }
+        if (!subRes.ok) throw new Error(subData.error ?? (tr ? "Gönderim başarısız" : "Submit failed"));
+      }
+      await loadBalance();
+    } catch (e) {
+      setPrepError(e instanceof Error ? e.message : tr ? "Hazırlık başarısız" : "Prepare failed");
+    } finally {
+      setPrepBusy(false);
+      setPrepStage("");
+    }
   };
 
   const submitDeposit = async () => {
     setBusy(true);
+    setStage("anchor");
     setError(null);
     setResult(null);
     try {
+      const body: { amount: number; address?: string; token?: string } = { amount };
+      if (mode === "wallet" && wallet && token) {
+        body.address = wallet;
+        body.token = token;
+      }
       const res = await fetch("/api/anchor", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as Result & { error?: string };
+      if (res.status === 401) {
+        expire();
+        throw new Error(data.error ?? (tr ? "Oturum süresi doldu" : "Session expired"));
+      }
       if (!res.ok) throw new Error(data.error ?? "Deposit failed");
       setResult(data);
       setBalance(data.balance);
+      await loadBalance();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Deposit failed");
     } finally {
       setBusy(false);
+      setStage("");
     }
   };
 
   const submitWithdraw = async () => {
     setBusy(true);
+    setStage("anchor");
     setError(null);
     setWithdrawn(null);
     try {
+      if (mode === "wallet" && wallet && token) {
+        const res = await fetch("/api/anchor/withdraw", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ amount: usdc, address: wallet, token }),
+        });
+        const data = (await res.json()) as WalletWithdrawInit;
+        if (res.status === 401) {
+          expire();
+          throw new Error(data.error ?? (tr ? "Oturum süresi doldu" : "Session expired"));
+        }
+        if (!res.ok || !data.xdr || !data.networkPassphrase || !data.withdraw) {
+          throw new Error(data.error ?? (tr ? "Çekim başlatılamadı" : "Withdrawal failed"));
+        }
+        const withdrawInfo = data.withdraw;
+        setStage("sign");
+        let signed: string;
+        try {
+          signed = await signWithFallback(data.xdr, wallet, data.networkPassphrase);
+        } catch {
+          setError(t("wallet.sign.cancelled"));
+          return;
+        }
+        setStage("submit");
+        const subRes = await fetch("/api/anchor/withdraw/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ xdr: signed, id: withdrawInfo.id, token, address: wallet }),
+        });
+        const subData = (await subRes.json()) as {
+          status?: string;
+          amountOut?: string | null;
+          stellarTxId?: string | null;
+          balance?: string;
+          error?: string;
+        };
+        if (subRes.status === 401) {
+          expire();
+          throw new Error(subData.error ?? (tr ? "Oturum süresi doldu" : "Session expired"));
+        }
+        if (!subRes.ok) throw new Error(subData.error ?? (tr ? "Çekim gönderilemedi" : "Withdrawal submit failed"));
+        setWithdrawn({
+          withdraw: withdrawInfo,
+          amountIn: data.amountIn ?? String(usdc),
+          status: subData.status ?? "pending",
+          amountOut: subData.amountOut ?? null,
+          stellarTxId: subData.stellarTxId ?? null,
+          balance: subData.balance ?? balance ?? "0",
+        });
+        if (subData.balance) setBalance(subData.balance);
+        await loadBalance();
+        return;
+      }
+
       const res = await fetch("/api/anchor/withdraw", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -128,13 +295,20 @@ export default function DepositPage() {
       setBalance(data.balance);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Withdrawal failed");
-      void refreshBalance();
+      void loadBalance();
     } finally {
       setBusy(false);
+      setStage("");
     }
   };
 
   const available = balance === null ? 0 : Number(balance);
+
+  const stageLabel = (s: Stage) => {
+    if (s === "sign") return t("stage.sign");
+    if (s === "submit") return t("stage.submit");
+    return t("stage.anchor");
+  };
 
   return (
     <>
@@ -145,6 +319,10 @@ export default function DepositPage() {
           {tab === "in" ? t("dep.title") : t("wd.title")}
         </h1>
         <p className="mt-3 max-w-xl text-fg-2">{tab === "in" ? t("dep.body") : t("wd.body")}</p>
+
+        <div className="mt-6">
+          <WalletConnect />
+        </div>
 
         <div className="mt-8 flex border border-line-strong bg-inset">
           {(["in", "out"] as const).map((key) => (
@@ -167,7 +345,11 @@ export default function DepositPage() {
             <StatusPill tone="agent">SEP-6 · testnet</StatusPill>
           </div>
 
-          {tab === "in" ? (
+          {mode === "wallet" && needsPrepare ? (
+            <div className="mt-6">
+              <p className="text-sm text-fg-2">{t("prep.needed")}</p>
+            </div>
+          ) : tab === "in" ? (
             <>
               <label className="mt-6 block text-[11px] text-fg-2">{t("dep.amount")}</label>
               <div className="mt-3 flex items-center border border-line-strong bg-inset">
@@ -264,26 +446,39 @@ export default function DepositPage() {
               {!source?.connected ? (
                 <p className="mt-2 text-[11px] text-fg-3">{t("bal.hint")}</p>
               ) : null}
+              {mode === "unverified" ? (
+                <p className="mt-2 text-[11px] text-danger">{t("wallet.verify.hint")}</p>
+              ) : null}
             </div>
           ) : null}
 
-          <button
-            onClick={tab === "in" ? submitDeposit : submitWithdraw}
-            disabled={busy || (tab === "out" && (usdc <= 0 || usdc > available))}
-            className="mt-6 w-full bg-agent px-5 py-3 text-sm font-medium text-inset transition hover:brightness-110 disabled:opacity-50"
-          >
-            {busy
-              ? tab === "in"
-                ? tr
-                  ? "Anchor ile konuşuluyor ..."
-                  : "Talking to the anchor ..."
-                : t("wd.busy")
-              : tab === "in"
-                ? t("dep.submit")
-                : t("wd.submit")}
-          </button>
-
-          {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+          {mode === "wallet" && needsPrepare ? (
+            <>
+              <button
+                onClick={prepareAccount}
+                disabled={prepBusy}
+                className="mt-6 w-full bg-agent px-5 py-3 text-sm font-medium text-inset transition hover:brightness-110 disabled:opacity-50"
+              >
+                {prepBusy ? stageLabel(prepStage) : t("prep.button")}
+              </button>
+              {prepError ? <p className="mt-4 text-sm text-danger">{prepError}</p> : null}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={tab === "in" ? submitDeposit : submitWithdraw}
+                disabled={busy || mode === "unverified" || (tab === "out" && (usdc <= 0 || usdc > available))}
+                className="mt-6 w-full bg-agent px-5 py-3 text-sm font-medium text-inset transition hover:brightness-110 disabled:opacity-50"
+              >
+                {busy
+                  ? stageLabel(stage)
+                  : tab === "in"
+                    ? t("dep.submit")
+                    : t("wd.submit")}
+              </button>
+              {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+            </>
+          )}
         </div>
 
         {result ? (

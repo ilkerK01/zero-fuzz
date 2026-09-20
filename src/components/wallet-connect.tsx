@@ -5,38 +5,38 @@ import { useLang } from "@/components/lang";
 import { connectWallet, signChallenge } from "@/lib/wallet";
 import { useWallet } from "@/components/wallet";
 
-type State = "idle" | "connecting" | "connected" | "verifying" | "verified" | "error";
+type Phase = "idle" | "connecting" | "verifying" | "error";
 
 export function WalletConnect() {
   const { lang } = useLang();
   const tr = lang === "tr";
   const { address, verified, connect: remember, markVerified, disconnect } = useWallet();
-  const [state, setState] = useState<State>(verified ? "verified" : address ? "connected" : "idle");
+  const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const short = address ? `${address.slice(0, 4)}…${address.slice(-4)}` : "";
 
   const connect = async () => {
     setError(null);
-    setState("connecting");
+    setPhase("connecting");
     try {
       const addr = await connectWallet();
       remember(addr);
-      setState("connected");
+      setPhase("idle");
     } catch (e) {
       if (e instanceof Error && e.message === "cancelled") {
-        setState("idle");
+        setPhase("idle");
         return;
       }
       setError(tr ? "Cüzdan bağlanamadı" : "Could not connect wallet");
-      setState("error");
+      setPhase("error");
     }
   };
 
   const verify = async () => {
     if (!address) return;
     setError(null);
-    setState("verifying");
+    setPhase("verifying");
     try {
       const res = await fetch(`/api/anchor/challenge?account=${address}`);
       const data = (await res.json()) as {
@@ -51,25 +51,25 @@ export function WalletConnect() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ transaction: signed }),
       });
-      const out = (await verifyRes.json()) as { verified?: boolean; error?: string };
-      if (!verifyRes.ok || !out.verified) throw new Error(out.error);
-      markVerified();
-      setState("verified");
+      const out = (await verifyRes.json()) as { token?: string; verified?: boolean; error?: string };
+      if (!verifyRes.ok || !out.verified || !out.token) throw new Error(out.error);
+      markVerified(out.token);
+      setPhase("idle");
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : tr ? "Doğrulama başarısız" : "Verification failed");
-      setState("error");
+      setPhase("error");
     }
   };
 
-  if (state === "idle" || state === "connecting") {
+  if (!address) {
     return (
       <button
         onClick={connect}
-        disabled={state === "connecting"}
+        disabled={phase === "connecting"}
         className="inline-flex items-center gap-2 rounded-full border border-line-strong px-4 py-2 text-sm font-medium text-fg transition hover:border-agent hover:text-agent disabled:opacity-50"
       >
         <span className="h-1.5 w-1.5 rounded-full bg-fg-3" />
-        {state === "connecting"
+        {phase === "connecting"
           ? tr ? "Bağlanıyor…" : "Connecting…"
           : tr ? "Cüzdan bağla" : "Connect wallet"}
       </button>
@@ -79,20 +79,20 @@ export function WalletConnect() {
   return (
     <div className="flex items-center gap-2">
       <span className="mono inline-flex items-center gap-2 rounded-full border border-line-strong bg-inset px-3 py-1.5 text-xs text-fg">
-        <span className={`h-1.5 w-1.5 rounded-full ${state === "verified" ? "bg-ok" : "bg-agent"}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${verified ? "bg-ok" : "bg-agent"}`} />
         {short}
       </span>
-      {state === "verified" ? (
+      {verified ? (
         <span className="rounded-full border border-ok/50 bg-ok/10 px-3 py-1.5 text-xs font-medium text-ok">
           {tr ? "SEP-10 doğrulandı" : "SEP-10 verified"}
         </span>
       ) : (
         <button
           onClick={verify}
-          disabled={state === "verifying"}
+          disabled={phase === "verifying"}
           className="rounded-full bg-gradient-to-r from-agent to-[#8AF0FF] px-3.5 py-1.5 text-xs font-medium text-inset transition hover:brightness-105 disabled:opacity-50"
         >
-          {state === "verifying"
+          {phase === "verifying"
             ? tr ? "İmzalanıyor…" : "Signing…"
             : tr ? "Anchor ile doğrula" : "Verify with anchor"}
         </button>
@@ -100,7 +100,7 @@ export function WalletConnect() {
       <button
         onClick={() => {
           disconnect();
-          setState("idle");
+          setPhase("idle");
           setError(null);
         }}
         className="rounded-full border border-line-strong px-3 py-1.5 text-xs text-fg-3 transition hover:border-danger hover:text-danger"

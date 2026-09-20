@@ -4,6 +4,12 @@
 
 <p align="center"><b>Let our agents break your contract before mainnet does.</b></p>
 
+<p align="center">
+  <a href="https://zero-fuzz-risein1.vercel.app"><b>Live app</b></a> ·
+  <a href="docs/demo/zero-fuzz-demo.mp4"><b>Demo video</b></a> ·
+  <a href="https://stellar.expert/explorer/testnet/contract/CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ"><b>Contract on testnet</b></a>
+</p>
+
 <p align="center">Rise In x Stellar Pro Hackathon, Istanbul · <b>Genesis track</b></p>
 
 ---
@@ -139,7 +145,7 @@ Everything below is live on **Stellar testnet** and independently verifiable.
 
 | | |
 |---|---|
-| **Live app** | _see Submission notes below_ |
+| **Live app** | **[https://zero-fuzz-risein1.vercel.app](https://zero-fuzz-risein1.vercel.app)** |
 | **Audit registry contract** | [`CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ`](https://stellar.expert/explorer/testnet/contract/CANPTYOSSNRLY65FHFK5M4XFDZKSNRF36FMRSB3LGCHTV5F25K7JI6DZ) |
 | **Wasm hash** | `830ceac9398cfa94814090625d905e8faa26ee6be905e82465876aead15b1427` |
 | **Deploy tx** | [`fdb63979…bb55`](https://stellar.expert/explorer/testnet/tx/fdb63979e331a349c52c7c4af1bf2ff7ef40099f2c9b63421bc9b8294afabb55) |
@@ -490,11 +496,14 @@ typeface.
 ## Submission notes
 
 - **Track:** Genesis
-- **Live app:** the frontend, passkey flow and the entire anchor leg run on Vercel; the
-  sandbox does not, because serverless functions cannot start containers. On the hosted
-  build a scan authenticates, calls the model and returns the generated Rust test, then
-  reports that the test was not executed. **To see a contract actually fail, run it locally
-  with Docker**, or watch the demo video.
+- **Live app:** [https://zero-fuzz-risein1.vercel.app](https://zero-fuzz-risein1.vercel.app)
+- **What works on the hosted build:** every page, the passkey flow, wallet connect, the
+  SEP-10 session, the live on-chain balance, and the full withdrawal path. A scan
+  authenticates, calls the model and returns a real generated Rust test.
+- **What does not, and why:** the sandbox. Serverless functions cannot start containers, so
+  the hosted build reports `container runtime not available on this host, test not executed`
+  instead of pretending the test ran. **To watch a contract actually fail, run it locally
+  with Docker** (see [Quick start](#quick-start)) or watch the demo video.
 - Environment variables for a hosted deploy: `ZF_ACCOUNT_SECRET`, `ZF_ACCOUNT_PUBLIC`,
   `ZF_ANCHOR_URL`, `ZF_ASSET_CODE`, `ZF_ASSET_ISSUER`, `GEMINI_API_KEY`, `ZF_MODEL`.
 - Passkeys are bound to the domain and stored in memory, so register a new one on the

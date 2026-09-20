@@ -21,3 +21,5 @@ next-env.d.ts
 /contracts/**/target/
 /docs/demo/seg/
 /docs/demo/parts/
+
+.vercel
